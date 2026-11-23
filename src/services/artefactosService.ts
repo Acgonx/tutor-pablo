@@ -15,26 +15,7 @@ import type {
   GeneratedStudyPack,
   NivelDificultad,
 } from '../types/studyMaterial';
-
-function normalizeTimestampToIso(value: unknown): string {
-  if (value && typeof value === 'object' && 'toDate' in value) {
-    const maybeFn = (value as { toDate?: unknown }).toDate;
-    if (typeof maybeFn === 'function') {
-      const date = (maybeFn as () => Date)();
-      return Number.isNaN(date.getTime()) ? new Date().toISOString() : date.toISOString();
-    }
-  }
-  if (value instanceof Date) {
-    return Number.isNaN(value.getTime()) ? new Date().toISOString() : value.toISOString();
-  }
-  if (typeof value === 'string' && value.trim()) {
-    return value;
-  }
-  if (typeof value === 'number') {
-    return new Date(value).toISOString();
-  }
-  return new Date().toISOString();
-}
+import { normalizeTimestampToIso } from '../utils/firestoreUtils';
 
 function normalizeDificultad(raw: unknown): NivelDificultad {
   if (
