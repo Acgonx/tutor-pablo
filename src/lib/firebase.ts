@@ -35,6 +35,7 @@ export const isFirebaseConfigured = missingFirebaseEnvVars.length === 0;
 export const COLLECTIONS = {
   LIBRETA_ERRORES: 'libreta_errores',
   RETOS_PABLO: 'retos_pablo',
+  SESIONES_PABLO: 'sesiones_pablo',
 } as const;
 
 const measurementId = import.meta.env.VITE_FIREBASE_MEASUREMENT_ID?.trim();
