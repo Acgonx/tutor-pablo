@@ -1,5 +1,6 @@
 import { Route, Routes } from 'react-router-dom';
 import { StudentRetoPage } from './pages/StudentRetoPage';
+import { StudentSessionPage } from './pages/StudentSessionPage';
 import { TeacherDashboardPage } from './pages/TeacherDashboardPage';
 
 export function App() {
@@ -7,6 +8,7 @@ export function App() {
     <Routes>
       <Route path="/" element={<TeacherDashboardPage />} />
       <Route path="/reto/:id" element={<StudentRetoPage />} />
+      <Route path="/sesion/:id" element={<StudentSessionPage />} />
       <Route
         path="*"
         element={

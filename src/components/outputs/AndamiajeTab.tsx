@@ -6,6 +6,7 @@ import {
   EyeOff,
   HelpCircle,
   Layers,
+  Printer,
   Sparkles,
   Target,
 } from 'lucide-react';
@@ -39,7 +40,27 @@ export function AndamiajeTab({ data }: AndamiajeTabProps) {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
+      <div className="no-print flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
+        <div>
+          <h3 className="text-sm font-bold text-slate-900">
+            Explicación con Andamiaje · Impresión
+          </h3>
+          <p className="text-xs text-slate-500">
+            Imprime la guía con las soluciones abiertas u ocultas según prefieras.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => window.print()}
+          className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-bold text-white shadow-xs hover:bg-indigo-700"
+        >
+          <Printer className="h-4 w-4" />
+          Imprimir Andamiaje / Guardar PDF
+        </button>
+      </div>
+
+      <div className="print-sheet space-y-5">
+      <div className="print-avoid-break flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
         <div className="max-w-2xl">
           <div className="flex items-center gap-2 text-xs font-bold text-indigo-700 uppercase">
             <Layers className="h-4 w-4" />
@@ -47,7 +68,7 @@ export function AndamiajeTab({ data }: AndamiajeTabProps) {
           </div>
           <p className="mt-1.5 text-sm leading-relaxed text-slate-700">{data.introduccion}</p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="no-print flex flex-wrap gap-2">
           <button
             type="button"
             onClick={() => setAllSolutions(true)}
@@ -196,6 +217,7 @@ export function AndamiajeTab({ data }: AndamiajeTabProps) {
           </div>
         )}
       </section>
+      </div>
     </div>
   );
 }
