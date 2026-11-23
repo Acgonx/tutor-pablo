@@ -13,13 +13,18 @@ import { isGeminiConfigured, regenerateSingleMiniApp } from '../../lib/gemini';
 import { createRetoPablo } from '../../services/retosService';
 import type { LibretaErrorDoc, RetoPabloHydrated, TipoJuego } from '../../types/firestore';
 import type { OcrVerificationData } from '../../types/ocr';
-import type { GamePayload, MiniAppsBundle } from '../../types/studyMaterial';
+import type {
+  GamePayload,
+  MiniAppsBundle,
+  NivelDificultad,
+} from '../../types/studyMaterial';
 import { downloadStandaloneHtml } from '../../utils/exportStandaloneHtml';
 import { GameRenderer } from '../games/GameRenderer';
 
 interface MiniAppsTabProps {
   asignatura: string;
   tema: string;
+  dificultad: NivelDificultad;
   miniApps: MiniAppsBundle;
   verification: OcrVerificationData;
   injectedErrors: LibretaErrorDoc[];
@@ -41,6 +46,7 @@ const MINI_APP_TABS: ReadonlyArray<{
 export function MiniAppsTab({
   asignatura,
   tema,
+  dificultad,
   miniApps,
   verification,
   injectedErrors,
@@ -98,6 +104,7 @@ export function MiniAppsTab({
         tipoJuego: selectedTipo,
         verification,
         libretaErrores: injectedErrors,
+        dificultad,
       });
       onUpdateMiniApp(selectedTipo, freshPayload);
       setPublishedLinks((prev) => {

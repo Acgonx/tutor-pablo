@@ -1,4 +1,11 @@
-import { Timestamp, addDoc, collection, doc, getDoc } from 'firebase/firestore';
+import {
+  Timestamp,
+  addDoc,
+  collection,
+  doc,
+  getDoc,
+  updateDoc,
+} from 'firebase/firestore';
 import { COLLECTIONS, requireDb } from '../lib/firebase';
 import type {
   EsquemaVisualData,
@@ -78,4 +85,24 @@ export async function getSesionPabloById(id: string): Promise<SesionPabloDoc | n
     mini_apps: miniApps,
     created_at: new Date().toISOString(),
   };
+}
+
+export async function updateSesionPablo(
+  id: string,
+  params: {
+    asignatura: string;
+    tema: string;
+    esquema_visual: EsquemaVisualData;
+    explicacion_andamiaje: ExplicacionAndamiajeData;
+    mini_apps: MiniAppsBundle;
+  },
+): Promise<void> {
+  const db = requireDb();
+  await updateDoc(doc(db, COLLECTIONS.SESIONES_PABLO, id), {
+    asignatura: params.asignatura.trim(),
+    tema: params.tema.trim(),
+    esquema_visual_json: JSON.stringify(params.esquema_visual),
+    explicacion_andamiaje_json: JSON.stringify(params.explicacion_andamiaje),
+    mini_apps_json: JSON.stringify(params.mini_apps),
+  });
 }

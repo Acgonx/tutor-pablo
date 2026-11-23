@@ -8,9 +8,21 @@ import type {
   FlashcardsPayload,
   GamePayload,
   GeneratedStudyPack,
+  NivelDificultad,
   OrdenarPasosPayload,
   TriviaRetoPayload,
 } from '../types/studyMaterial';
+
+const DIFICULTAD_GUIDANCE: Record<NivelDificultad, string> = {
+  refuerzo:
+    'NIVEL REFUERZO GUIADO: divide las explicaciones en pasos muy pequeños y visuales, usa lenguaje muy cercano, ofrece pistas generosas y consolida la base antes de introducir dificultad.',
+  estandar:
+    'NIVEL ESTÁNDAR 1º ESO (LOMLOE CANARIAS): equilibrio entre comprensión clara, práctica variada y situaciones competenciales habituales de 1º de ESO.',
+  ampliacion:
+    'NIVEL AMPLIACIÓN: reduce las pistas obvias, exige razonamiento en varios pasos, incluye ejercicios de transferencia a contextos nuevos y aumenta la exigencia de precisión.',
+  reto_alto:
+    'NIVEL RETO ALTO / EXCELENCIA: diseña preguntas y ejercicios exigentes con distractores inteligentes, problemas combinados, situaciones competenciales complejas y menos ayudas intermedias.',
+};
 
 export const GEMINI_MODEL = import.meta.env.VITE_GEMINI_MODEL?.trim() || 'gemini-3.8-flash';
 
@@ -602,17 +614,22 @@ Tareas del Paso 1 (Validación OCR):
 export async function generateStudyPack(params: {
   verification: OcrVerificationData;
   libretaErrores: LibretaErrorDoc[];
+  dificultad?: NivelDificultad;
 }): Promise<GeneratedStudyPack> {
   const ai = getGenAIClient();
+  const dificultad = params.dificultad ?? 'estandar';
   const context = buildPedagogicalContext(params.verification, params.libretaErrores);
 
-  const prompt = `Genera un paquete completo de estudio personalizado para Pablo (alumno de 1º de ESO en Canarias, Decreto 30/2023 LOMLOE) usando estrictamente el contexto verificado y aplicando:
+  const prompt = `Genera un paquete completo de estudio personalizado (artefacto unificado) para Pablo (alumno de 1º de ESO en Canarias, Decreto 30/2023 LOMLOE) usando estrictamente el contexto verificado.
+${DIFICULTAD_GUIDANCE[dificultad]}
+
+Aplica de forma coherente en TODAS las secciones (Esquema, Andamiaje, Examen y las 4 Mini-Apps):
 - Repetición Espaciada: integra de forma obligatoria y natural los conceptos de la "Libreta de Errores histórica" y los "Errores recientes" en el esquema, en bloques de andamiaje, en preguntas del examen y en las 4 mini-apps interactivas (marcando es_repaso_libreta / refuerza_error_libreta / evalua_error_libreta = true en esos ítems).
 - Active Recall: preguntas que obliguen a evocar la respuesta antes de revelarla y pistas progresivas.
 - Dual Coding: anclajes visuales concretos, iconos claros, comparativas "Error vs Forma correcta" y organización espacial limpia.
 - Andamiaje: progresión de menor a mayor complejidad con situación-problema final competencial (LOMLOE Canarias).
 - Examen PDF: suma exacta de 10 puntos entre las preguntas, con espacios de líneas realistas para el alumno y solucionario detallado + criterios LOMLOE para el docente.
-- Mini-Apps iPad: los 4 juegos completos (flashcards, clasificar, trivia_reto, ordenar_pasos) listos para jugar de forma táctil en pantalla de iPad.
+- Mini-Apps iPad: los 4 juegos completos (flashcards, clasificar, trivia_reto, ordenar_pasos) listos para jugar de forma táctil en pantalla de iPad, alineados exactamente con el mismo temario y nivel de dificultad.
 
 ${context}`;
 
@@ -643,12 +660,71 @@ ${context}`;
   };
 }
 
+export async function iterateStudyPack(params: {
+  currentPack: GeneratedStudyPack;
+  verification: OcrVerificationData;
+  libretaErrores: LibretaErrorDoc[];
+  targetDificultad: NivelDificultad;
+  instruccionCambio: string;
+}): Promise<GeneratedStudyPack> {
+  const ai = getGenAIClient();
+  const context = buildPedagogicalContext(params.verification, params.libretaErrores);
+
+  const prompt = `Tienes un artefacto educativo completo ya generado para Pablo (1º ESO Canarias, Decreto 30/2023). El docente/padre pide ITERAR sobre él manteniendo la consistencia interna entre las 4 partes (Esquema Visual, Explicación con Andamiaje, Examen PDF y las 4 Mini-Apps).
+
+=== NIVEL DE DIFICULTAD OBJETIVO ===
+${DIFICULTAD_GUIDANCE[params.targetDificultad]}
+
+=== CAMBIOS SOLICITADOS POR EL DOCENTE / PADRE ===
+${params.instruccionCambio.trim() || 'Ajustar el conjunto del material al nuevo nivel de dificultad manteniendo la coherencia entre esquema, andamiaje, examen y mini-apps.'}
+
+=== ARTEFACTO ACTUAL (BASE DE CONSISTENCIA) ===
+${JSON.stringify(params.currentPack)}
+
+=== CONTEXTO ORIGINAL Y LIBRETA DE ERRORES ACTUALIZADA ===
+${context}
+
+Instrucciones de iteración:
+1. Conserva lo que funciona bien del artefacto actual y modifica o amplía lo necesario para cumplir exactamente los cambios pedidos y el nivel "${params.targetDificultad}".
+2. Mantén coherencia total entre terminología, ejemplos, conceptos clave y errores de libreta entre Esquema, Andamiaje, Examen y Mini-Apps.
+3. Si se sube la dificultad, actualiza también las preguntas del examen, los bloques de andamiaje y los retos de las 4 mini-apps para que todo el artefacto suba de nivel al unísono.
+4. Asegura que el examen siga sumando 10 puntos y que los 4 juegos sigan cumpliendo el esquema estricto.`;
+
+  const response = await ai.models.generateContent({
+    model: GEMINI_MODEL,
+    contents: [{ text: prompt }],
+    config: {
+      systemInstruction:
+        'Eres un arquitecto instruccional experto en LOMLOE Canarias (Decreto 30/2023, 1º ESO). Debes evolucionar un artefacto educativo existente preservando la coherencia pedagógica global entre todas sus pestañas y actividades. Devuelve JSON válido ajustado al esquema.',
+      responseMimeType: 'application/json',
+      responseSchema: studyPackResponseSchema,
+      temperature: 0.45,
+    },
+  });
+
+  const parsed = parseJsonResponse<GeneratedStudyPack>(response.text);
+
+  return {
+    ...parsed,
+    asignatura: params.verification.asignatura,
+    tema: parsed.tema?.trim() || params.verification.tema,
+    mini_apps: {
+      flashcards: sanitizeGamePayload(parsed.mini_apps.flashcards) as FlashcardsPayload,
+      clasificar: sanitizeGamePayload(parsed.mini_apps.clasificar) as ClasificarPayload,
+      trivia_reto: sanitizeGamePayload(parsed.mini_apps.trivia_reto) as TriviaRetoPayload,
+      ordenar_pasos: sanitizeGamePayload(parsed.mini_apps.ordenar_pasos) as OrdenarPasosPayload,
+    },
+  };
+}
+
 export async function regenerateSingleMiniApp(params: {
   tipoJuego: TipoJuego;
   verification: OcrVerificationData;
   libretaErrores: LibretaErrorDoc[];
+  dificultad?: NivelDificultad;
 }): Promise<GamePayload> {
   const ai = getGenAIClient();
+  const dificultad = params.dificultad ?? 'estandar';
   const context = buildPedagogicalContext(params.verification, params.libretaErrores);
 
   const schemaByType: Record<TipoJuego, Schema> = {
@@ -659,6 +735,7 @@ export async function regenerateSingleMiniApp(params: {
   };
 
   const prompt = `Genera una NUEVA versión variada e inspiradora de la mini-app de tipo "${params.tipoJuego}" para Pablo (1º ESO Canarias, Decreto 30/2023), reforzando especialmente los errores de la libreta y aplicando Active Recall.
+${DIFICULTAD_GUIDANCE[dificultad]}
 Evita repetir exactamente las mismas preguntas anteriores; formula ángulos frescos o ejemplos cotidianos canarios cuando encaje con la materia.
 
 ${context}`;

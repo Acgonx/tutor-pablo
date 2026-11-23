@@ -17,10 +17,23 @@ import type {
   SeveridadError,
   UploadedImageItem,
 } from '../../types/ocr';
+import type { NivelDificultad } from '../../types/studyMaterial';
+
+const DIFICULTAD_CHOICES: ReadonlyArray<{
+  value: NivelDificultad;
+  label: string;
+}> = [
+  { value: 'refuerzo', label: 'Refuerzo guiado' },
+  { value: 'estandar', label: 'Estándar 1º ESO' },
+  { value: 'ampliacion', label: 'Ampliación' },
+  { value: 'reto_alto', label: 'Reto alto' },
+];
 
 interface OcrVerificationPanelProps {
   verification: OcrVerificationData;
   images: UploadedImageItem[];
+  dificultad: NivelDificultad;
+  onDificultadChange: (value: NivelDificultad) => void;
   activeLibretaErrorsCount: number | null;
   isGenerating: boolean;
   errorMessage: string | null;
@@ -32,6 +45,8 @@ interface OcrVerificationPanelProps {
 export function OcrVerificationPanel({
   verification,
   images,
+  dificultad,
+  onDificultadChange,
   activeLibretaErrorsCount,
   isGenerating,
   errorMessage,
@@ -310,7 +325,29 @@ export function OcrVerificationPanel({
           )}
         </div>
 
-        <div className="mt-6 rounded-xl border border-indigo-200 bg-indigo-50/70 p-4 text-sm text-indigo-950">
+        <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4">
+          <p className="text-xs font-bold tracking-wide text-slate-600 uppercase">
+            Nivel de dificultad inicial del artefacto
+          </p>
+          <div className="mt-2.5 flex flex-wrap gap-2">
+            {DIFICULTAD_CHOICES.map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => onDificultadChange(opt.value)}
+                className={`rounded-xl border px-3.5 py-2 text-xs font-bold transition-colors ${
+                  dificultad === opt.value
+                    ? 'border-indigo-600 bg-indigo-600 text-white shadow-xs'
+                    : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="mt-4 rounded-xl border border-indigo-200 bg-indigo-50/70 p-4 text-sm text-indigo-950">
           <div className="flex items-start gap-2.5">
             <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-indigo-600" />
             <div>

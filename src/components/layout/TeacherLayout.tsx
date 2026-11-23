@@ -1,13 +1,20 @@
 import type { ReactNode } from 'react';
-import { BookMarked, GraduationCap, Sparkles, TabletSmartphone } from 'lucide-react';
+import {
+  Archive,
+  BookMarked,
+  GraduationCap,
+  Sparkles,
+  TabletSmartphone,
+} from 'lucide-react';
 import { isFirebaseConfigured } from '../../lib/firebase';
 import { GEMINI_MODEL, isGeminiConfigured } from '../../lib/gemini';
 
-export type TeacherSection = 'generador' | 'libreta' | 'retos';
+export type TeacherSection = 'generador' | 'artefactos' | 'libreta' | 'retos';
 
 interface TeacherLayoutProps {
   activeSection: TeacherSection;
   onSelectSection: (section: TeacherSection) => void;
+  artefactosCount: number;
   pendingErrorsCount: number;
   retosCount: number;
   children: ReactNode;
@@ -16,6 +23,7 @@ interface TeacherLayoutProps {
 export function TeacherLayout({
   activeSection,
   onSelectSection,
+  artefactosCount,
   pendingErrorsCount,
   retosCount,
   children,
@@ -27,6 +35,12 @@ export function TeacherLayout({
     badge?: number;
   }> = [
     { id: 'generador', label: 'Generador de Estudio', icon: Sparkles },
+    {
+      id: 'artefactos',
+      label: 'Artefactos',
+      icon: Archive,
+      badge: artefactosCount,
+    },
     {
       id: 'libreta',
       label: 'Libreta de Errores',

@@ -1,4 +1,5 @@
 import type { FalloEnPartida, TipoJuego } from './firestore';
+import type { OcrVerificationData } from './ocr';
 
 export interface EsquemaRama {
   titulo: string;
@@ -179,6 +180,31 @@ export interface GameCompletionResult {
   aciertos: number;
   total: number;
   fallos: FalloEnPartida[];
+}
+
+export type NivelDificultad = 'refuerzo' | 'estandar' | 'ampliacion' | 'reto_alto';
+
+export interface ArtefactoIteracion {
+  version: number;
+  fecha: string;
+  dificultad: NivelDificultad;
+  instruccion: string;
+}
+
+export interface ArtefactoDoc {
+  id: string;
+  asignatura: string;
+  tema: string;
+  titulo: string;
+  dificultad: NivelDificultad;
+  version: number;
+  verification: OcrVerificationData;
+  study_pack: GeneratedStudyPack;
+  injected_errors_summary: string[];
+  sesion_pablo_id?: string;
+  historial_iteraciones: ArtefactoIteracion[];
+  created_at: string;
+  updated_at: string;
 }
 
 export type { TipoJuego };
