@@ -1,13 +1,20 @@
 import { useState } from 'react';
 import {
   ArrowLeft,
+  Check,
+  Copy,
+  ExternalLink,
   FileSpreadsheet,
   Gamepad2,
   GitBranch,
   Layers,
+  Loader2,
   PlusCircle,
+  Share2,
   Sparkles,
 } from 'lucide-react';
+import { isFirebaseConfigured } from '../../lib/firebase';
+import { createSesionPablo } from '../../services/sesionesService';
 import type { LibretaErrorDoc, RetoPabloHydrated, TipoJuego } from '../../types/firestore';
 import type { OcrVerificationData } from '../../types/ocr';
 import type { GamePayload, GeneratedStudyPack } from '../../types/studyMaterial';
@@ -53,6 +60,44 @@ export function OutputTabs({
   onRetoPublished,
 }: OutputTabsProps) {
   const [activeTab, setActiveTab] = useState<OutputTabId>('esquema');
+  const [sessionUrl, setSessionUrl] = useState<string | null>(null);
+  const [isPublishingSession, setIsPublishingSession] = useState(false);
+  const [sessionError, setSessionError] = useState<string | null>(null);
+  const [copiedSession, setCopiedSession] = useState(false);
+
+  async function handlePublishFullSession() {
+    setSessionError(null);
+    setIsPublishingSession(true);
+    try {
+      const created = await createSesionPablo({
+        asignatura: studyPack.asignatura,
+        tema: studyPack.tema,
+        esquema_visual: studyPack.esquema_visual,
+        explicacion_andamiaje: studyPack.explicacion_andamiaje,
+        mini_apps: studyPack.mini_apps,
+      });
+      setSessionUrl(`${window.location.origin}/sesion/${created.id}`);
+    } catch (error) {
+      setSessionError(
+        error instanceof Error
+          ? error.message
+          : 'No se pudo generar el enlace de la sesión.',
+      );
+    } finally {
+      setIsPublishingSession(false);
+    }
+  }
+
+  async function handleCopySessionUrl() {
+    if (!sessionUrl) return;
+    try {
+      await navigator.clipboard.writeText(sessionUrl);
+      setCopiedSession(true);
+      window.setTimeout(() => setCopiedSession(false), 2000);
+    } catch {
+      // Silencio si no hay permisos de portapapeles
+    }
+  }
 
   return (
     <div className="space-y-5">
@@ -66,6 +111,19 @@ export function OutputTabs({
           </div>
 
           <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={!isFirebaseConfigured || isPublishingSession}
+              onClick={() => void handlePublishFullSession()}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-3.5 py-2 text-xs font-bold text-white shadow-xs hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+            >
+              {isPublishingSession ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Share2 className="h-3.5 w-3.5" />
+              )}
+              Enlace completo para Pablo
+            </button>
             <button
               type="button"
               onClick={onBackToVerification}
@@ -114,6 +172,51 @@ export function OutputTabs({
             <p className="mt-2 font-semibold text-rose-700">{firestoreWarning}</p>
           )}
         </div>
+
+        {sessionUrl && (
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-950">
+            <div className="min-w-0 flex-1">
+              <p className="font-bold">
+                Enlace completo para Pablo (Esquema + Andamiaje + Mini-Apps):
+              </p>
+              <p className="mt-0.5 truncate font-mono text-emerald-900">{sessionUrl}</p>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              <button
+                type="button"
+                onClick={() => void handleCopySessionUrl()}
+                className="inline-flex items-center gap-1 rounded-lg bg-white px-3 py-1.5 font-bold text-emerald-800 ring-1 ring-emerald-300 hover:bg-emerald-100"
+              >
+                {copiedSession ? (
+                  <>
+                    <Check className="h-3.5 w-3.5" />
+                    Copiado
+                  </>
+                ) : (
+                  <>
+                    <Copy className="h-3.5 w-3.5" />
+                    Copiar
+                  </>
+                )}
+              </button>
+              <a
+                href={sessionUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 rounded-lg bg-emerald-700 px-3 py-1.5 font-bold text-white hover:bg-emerald-800"
+              >
+                Abrir
+                <ExternalLink className="h-3.5 w-3.5" />
+              </a>
+            </div>
+          </div>
+        )}
+
+        {sessionError && (
+          <p className="mt-3 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs font-semibold text-rose-800">
+            {sessionError}
+          </p>
+        )}
 
         <div className="mt-4 flex flex-wrap gap-2" role="tablist">
           {TABS.map((tab) => {
