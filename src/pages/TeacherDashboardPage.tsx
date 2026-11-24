@@ -21,6 +21,7 @@ import {
   runGenerateEvaluationDoc,
   runGenerateMiniApp,
   runIterateArtifact,
+  runRefineHtml5MiniApp,
   runStep1OcrAnalysis,
   runStep1TextIndexAnalysis,
 } from '../services/pedagogicalEngine';
@@ -43,6 +44,7 @@ import type {
 } from '../types/studyMaterial';
 import { prepareImageFile } from '../utils/imageUtils';
 import { ArtefactosPanel } from '../components/dashboard/ArtefactosPanel';
+import { EvolucionPanel } from '../components/dashboard/EvolucionPanel';
 import { LibretaErroresPanel } from '../components/dashboard/LibretaErroresPanel';
 import { RetosHistoryPanel } from '../components/dashboard/RetosHistoryPanel';
 import { ConfigWarningBanner } from '../components/layout/ConfigWarningBanner';
@@ -107,6 +109,7 @@ export function TeacherDashboardPage() {
 
   const [generatingGameType, setGeneratingGameType] = useState<TipoJuego | null>(null);
   const [generateGameError, setGenerateGameError] = useState<string | null>(null);
+  const [isRefiningHtml5, setIsRefiningHtml5] = useState(false);
 
   const [isIterating, setIsIterating] = useState(false);
   const [iterateError, setIterateError] = useState<string | null>(null);
@@ -288,6 +291,13 @@ export function TeacherDashboardPage() {
 
   async function handleAnalyzeManualTextWithGemini() {
     setUploadError(null);
+    setGenerateError(null);
+    setIterateError(null);
+    setIterateSuccessMessage(null);
+    setEsquemaError(null);
+    setAndamiajeError(null);
+    setGenerateDocError(null);
+    setGenerateGameError(null);
     setIsAnalyzingOcr(true);
     try {
       const result = await runStep1TextIndexAnalysis({
@@ -297,8 +307,23 @@ export function TeacherDashboardPage() {
         extraPrompt,
       });
       setVerification(result);
-      setGenerateError(null);
-      setStep('verify');
+
+      const outcome = await initializeArtifactFromVerification(
+        result,
+        dificultad,
+        libretaItems,
+      );
+      setStudyPack(outcome.studyPack);
+      setActiveArtefacto(outcome.artefacto);
+      setInjectedErrors(outcome.injectedErrors);
+      setSavedNewErrorsCount(outcome.savedNewErrorsCount);
+      setFirestoreWarning(outcome.firestoreWarning);
+      setStep('results');
+
+      if (outcome.artefacto) {
+        const createdArtefacto = outcome.artefacto;
+        setArtefactosItems((prev) => [createdArtefacto, ...prev]);
+      }
     } catch (error) {
       setUploadError(
         error instanceof Error
@@ -489,6 +514,33 @@ export function TeacherDashboardPage() {
       );
     } finally {
       setGeneratingGameType(null);
+    }
+  }
+
+  async function handleRefineHtml5MiniApp(instruction: string) {
+    const currentHtml5 = studyPack?.mini_apps.html5_neon;
+    if (!studyPack || !verification || !currentHtml5) return;
+    setGenerateGameError(null);
+    setIsRefiningHtml5(true);
+    try {
+      const outcome = await runRefineHtml5MiniApp({
+        currentPayload: currentHtml5,
+        instruction,
+        studyPack,
+        verification,
+        artefacto: activeArtefacto,
+        availableLibretaErrors: libretaItems,
+      });
+      setStudyPack(outcome.nextPack);
+      syncArtefactoState(outcome.nextArtefacto);
+    } catch (error) {
+      setGenerateGameError(
+        error instanceof Error
+          ? error.message
+          : 'No se pudo retocar el juego HTML5.',
+      );
+    } finally {
+      setIsRefiningHtml5(false);
     }
   }
 
@@ -718,26 +770,33 @@ export function TeacherDashboardPage() {
       {activeSection === 'generador' && (
         <>
           {step === 'upload' && (
-            <ImageUploader
-              asignatura={asignatura}
-              onAsignaturaChange={setAsignatura}
-              fuente={fuente}
-              onFuenteChange={setFuente}
-              images={images}
-              onAddImages={(files) => void handleAddImages(files)}
-              onRemoveImage={handleRemoveImage}
-              extraPrompt={extraPrompt}
-              onExtraPromptChange={setExtraPrompt}
-              manualText={manualText}
-              onManualTextChange={setManualText}
-              activeLibretaErrorsCount={activeSubjectErrorsCount}
-              isProcessingImages={isProcessingImages}
-              isAnalyzingOcr={isAnalyzingOcr}
-              errorMessage={uploadError}
-              onAnalyzeImages={() => void handleAnalyzeImages()}
-              onAnalyzeManualTextWithGemini={() => void handleAnalyzeManualTextWithGemini()}
-              onContinueWithManualText={handleContinueWithManualText}
-            />
+            <>
+              <EvolucionPanel
+                artefactos={artefactosItems}
+                libreta={libretaItems}
+                retos={retosItems}
+              />
+              <ImageUploader
+                asignatura={asignatura}
+                onAsignaturaChange={setAsignatura}
+                fuente={fuente}
+                onFuenteChange={setFuente}
+                images={images}
+                onAddImages={(files) => void handleAddImages(files)}
+                onRemoveImage={handleRemoveImage}
+                extraPrompt={extraPrompt}
+                onExtraPromptChange={setExtraPrompt}
+                manualText={manualText}
+                onManualTextChange={setManualText}
+                activeLibretaErrorsCount={activeSubjectErrorsCount}
+                isProcessingImages={isProcessingImages}
+                isAnalyzingOcr={isAnalyzingOcr}
+                errorMessage={uploadError}
+                onAnalyzeImages={() => void handleAnalyzeImages()}
+                onAnalyzeManualTextWithGemini={() => void handleAnalyzeManualTextWithGemini()}
+                onContinueWithManualText={handleContinueWithManualText}
+              />
+            </>
           )}
 
           {step === 'verify' && verification && (
@@ -776,10 +835,12 @@ export function TeacherDashboardPage() {
               generateDocError={generateDocError}
               generatingGameType={generatingGameType}
               generateGameError={generateGameError}
+              isRefiningHtml5={isRefiningHtml5}
               onGenerateEsquema={handleGenerateEsquema}
               onGenerateAndamiaje={handleGenerateAndamiaje}
               onGenerateEvaluationDoc={handleGenerateEvaluationDoc}
               onGenerateMiniApp={handleGenerateMiniApp}
+              onRefineHtml5={handleRefineHtml5MiniApp}
               onIterateArtifact={handleIterateArtifact}
               onUpdateVerification={handleUpdateVerificationFocus}
               onSesionAttached={handleSesionAttached}
@@ -817,13 +878,20 @@ export function TeacherDashboardPage() {
       )}
 
       {activeSection === 'retos' && (
-        <RetosHistoryPanel
-          items={retosItems}
-          isLoading={retosLoading}
-          errorMessage={retosError}
-          onRefresh={() => void loadRetos()}
-          onDelete={handleDeleteReto}
-        />
+        <>
+          <EvolucionPanel
+            artefactos={artefactosItems}
+            libreta={libretaItems}
+            retos={retosItems}
+          />
+          <RetosHistoryPanel
+            items={retosItems}
+            isLoading={retosLoading}
+            errorMessage={retosError}
+            onRefresh={() => void loadRetos()}
+            onDelete={handleDeleteReto}
+          />
+        </>
       )}
     </TeacherLayout>
   );

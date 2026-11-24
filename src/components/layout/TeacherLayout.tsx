@@ -7,7 +7,7 @@ import {
   TabletSmartphone,
 } from 'lucide-react';
 import { isFirebaseConfigured } from '../../lib/firebase';
-import { GEMINI_MODEL, isGeminiConfigured } from '../../lib/gemini';
+import { GEMINI_MODEL, isGeminiConfigured } from '../../lib/envConfig';
 
 export type TeacherSection = 'generador' | 'artefactos' | 'libreta' | 'retos';
 

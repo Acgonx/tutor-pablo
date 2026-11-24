@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Image as ImageIcon, Loader2, Sparkles } from 'lucide-react';
-import { isGeminiConfigured } from '../../lib/gemini';
+import { isGeminiConfigured } from '../../lib/envConfig';
 import type { GenerationPromptConfig, NivelDificultad } from '../../types/studyMaterial';
 
 interface GeminiPromptBoxProps {

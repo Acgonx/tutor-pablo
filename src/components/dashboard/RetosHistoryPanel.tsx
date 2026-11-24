@@ -33,7 +33,7 @@ const TIPO_LABEL: Record<TipoJuego, string> = {
   clasificar: 'Clasificar',
   trivia_reto: 'Trivia Reto',
   caza_error: '¡Caza al Error!',
-  html5_neon: 'Neon Arcade HTML5',
+  html5_neon: 'Juego HTML5 WOW',
   ordenar_pasos: 'Ordenar Pasos',
 };
 

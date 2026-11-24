@@ -1,6 +1,6 @@
 import { AlertTriangle } from 'lucide-react';
 import { isFirebaseConfigured, missingFirebaseEnvVars } from '../../lib/firebase';
-import { isGeminiConfigured } from '../../lib/gemini';
+import { isGeminiConfigured } from '../../lib/envConfig';
 
 export function ConfigWarningBanner() {
   if (isFirebaseConfigured && isGeminiConfigured) {

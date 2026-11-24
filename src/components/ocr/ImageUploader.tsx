@@ -16,7 +16,7 @@ import {
   FUENTES_DOCUMENTO,
   getAsignaturaByNombre,
 } from '../../data/curriculumCanarias';
-import { isGeminiConfigured } from '../../lib/gemini';
+import { isGeminiConfigured } from '../../lib/envConfig';
 import type { FuenteDocumento, UploadedImageItem } from '../../types/ocr';
 import { formatBytes } from '../../utils/imageUtils';
 
@@ -350,12 +350,12 @@ export function ImageUploader({
                   {isAnalyzingOcr ? (
                     <>
                       <Loader2 className="h-4 w-4 animate-spin" />
-                      Estructurando índice con Gemini...
+                      Preparando espacio de trabajo...
                     </>
                   ) : (
                     <>
                       <ListChecks className="h-4 w-4" />
-                      Analizar índice / texto y elegir qué practicar
+                      Abrir espacio de trabajo directo (sin OCR)
                     </>
                   )}
                 </button>

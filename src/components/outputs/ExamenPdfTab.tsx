@@ -9,6 +9,7 @@ import {
   SlidersHorizontal,
   Sparkles,
 } from 'lucide-react';
+import { getTipologiasPorAsignatura } from '../../data/curriculumCanarias';
 import type {
   EvaluacionYFichasBundle,
   GenerationPromptConfig,
@@ -72,22 +73,6 @@ const DOC_TABS: ReadonlyArray<{
   },
 ];
 
-const EVAL_TIPOLOGIAS = [
-  'Pintar / representar fracciones (barras o círculos)',
-  'Cálculo y operaciones (LaTeX)',
-  'Problemas contextualizados de la vida real',
-  'Geometría con figuras y medidas',
-  'Recta numérica / Coordenadas',
-  'Tablas de datos / análisis morfológico',
-  'Preguntas conceptuales / teóricas',
-] as const;
-
-const EVAL_SUGGESTIONS = [
-  'Incluye 2 ejercicios de colorear fracciones en círculos y barras, 2 operaciones y 1 problema.',
-  'Pon figuras geométricas con sus medidas para calcular área y perímetro.',
-  'Simulación de examen seria sin pistas evaluando todos los saberes clave del tema.',
-] as const;
-
 const TIPO_PREGUNTA_LABEL: Record<TipoPreguntaExamen, string> = {
   corta: 'Respuesta corta',
   desarrollo: 'Desarrollo',
@@ -116,6 +101,11 @@ export function ExamenPdfTab({
   const isExam = selectedDoc === 'simulacion_examen' || Boolean(data?.es_simulacion_examen);
   const isGeneratingThis = generatingDocType === selectedDoc;
   const isConfigOpen = !data || Boolean(openConfigFor[selectedDoc]);
+  const subjectPresets = getTipologiasPorAsignatura(asignatura);
+  const evalSuggestions = [
+    ...subjectPresets.evaluacionSugerencias,
+    'Simulación de examen seria sin pistas evaluando todos los saberes clave del tema.',
+  ];
 
   async function handleGenerateSubmit(config: GenerationPromptConfig) {
     await onGenerateDoc(selectedDoc, config);
@@ -167,13 +157,13 @@ export function ExamenPdfTab({
 
       {isConfigOpen && (
         <GeminiPromptBox
-          key={`${selectedDoc}_prompt`}
+          key={`${asignatura}_${selectedDoc}_prompt`}
           title={`Configurar ${activeMeta.label}`}
           subtitle="Elige exactamente cuántos ejercicios quieres, qué tipologías incluir y si lleva dibujos o figuras para pintar."
           countLabel="ejercicios o preguntas"
           defaultCantidad={activeMeta.defaultCantidad}
-          tipologiaOptions={EVAL_TIPOLOGIAS}
-          quickSuggestions={EVAL_SUGGESTIONS}
+          tipologiaOptions={subjectPresets.evaluacionTipologias}
+          quickSuggestions={evalSuggestions}
           defaultDificultad={
             selectedDoc === 'simulacion_examen'
               ? defaultDificultad

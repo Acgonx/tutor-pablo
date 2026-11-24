@@ -23,7 +23,7 @@ const GAME_LABELS: Record<TipoJuego, string> = {
   clasificar: 'Clasificar · Tap to Place',
   trivia_reto: 'Trivia Reto',
   caza_error: '¡Caza al Error! · Detective',
-  html5_neon: 'HTML5 Neón Arcade · WOW',
+  html5_neon: 'Juego HTML5 Interactivo · Efecto WOW',
   ordenar_pasos: 'Ordenar Pasos',
 };
 

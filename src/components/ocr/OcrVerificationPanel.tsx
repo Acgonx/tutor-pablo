@@ -14,7 +14,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
-import { isGeminiConfigured } from '../../lib/gemini';
+import { isGeminiConfigured } from '../../lib/envConfig';
 import type { LibretaErrorDoc } from '../../types/firestore';
 import type {
   DetectedErrorDraft,
@@ -178,14 +178,19 @@ export function OcrVerificationPanel({
         <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 pb-4">
           <div>
             <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1 text-xs font-bold text-amber-800 ring-1 ring-amber-200">
-              Validación OCR y Curricular · Paso 1 editable
+              {verification.fuente === 'indice_temario'
+                ? 'Lectura de Índice / Programación · Paso 1 editable'
+                : 'Validación OCR y Curricular · Paso 1 editable'}
             </span>
             <h2 className="mt-2 text-xl font-bold text-slate-900">
-              Verificación de lectura, currículo y origen de errores
+              {verification.fuente === 'indice_temario'
+                ? 'Elige los apartados del índice o programación que quieres practicar'
+                : 'Verificación de lectura, currículo y origen de errores'}
             </h2>
             <p className="mt-1 text-sm text-slate-600">
-              Revisa lo leído por Gemini, ajusta el contenido completado del currículo y
-              confirma si cada error detectado es realmente de Pablo o del propio material.
+              {verification.fuente === 'indice_temario'
+                ? 'Marca qué epígrafes del temario vas a trabajar hoy y revisa el contenido curricular completado.'
+                : 'Revisa lo leído por Gemini, ajusta el contenido completado del currículo y confirma si cada error detectado es realmente de Pablo o del propio material.'}
             </p>
           </div>
           <span className="rounded-xl bg-indigo-50 px-3 py-1.5 text-xs font-bold text-indigo-700">
@@ -428,7 +433,9 @@ export function OcrVerificationPanel({
           />
         </div>
 
-        {/* Origen de errores detectados */}
+        {/* Origen de errores detectados (oculto en modo índice salvo si hay hallazgos reales) */}
+        {(verification.fuente !== 'indice_temario' ||
+          verification.errores_detectados.length > 0) && (
         <div className="mt-6">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <div>
@@ -584,6 +591,7 @@ export function OcrVerificationPanel({
             </div>
           )}
         </div>
+        )}
 
         {/* Invocación explícita de errores previos (sin mezcla automática) */}
         <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4">

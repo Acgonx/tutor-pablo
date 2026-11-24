@@ -18,7 +18,7 @@ import {
   TrendingUp,
 } from 'lucide-react';
 import { isFirebaseConfigured } from '../../lib/firebase';
-import { isGeminiConfigured } from '../../lib/gemini';
+import { isGeminiConfigured } from '../../lib/envConfig';
 import { attachSesionToArtefacto } from '../../services/artefactosService';
 import { createSesionPablo } from '../../services/sesionesService';
 import type { LibretaErrorDoc, RetoPabloHydrated, TipoJuego } from '../../types/firestore';
@@ -56,6 +56,7 @@ interface OutputTabsProps {
   generateDocError: string | null;
   generatingGameType: TipoJuego | null;
   generateGameError: string | null;
+  isRefiningHtml5?: boolean;
   onGenerateEsquema: (config: GenerationPromptConfig) => Promise<void>;
   onGenerateAndamiaje: (config: GenerationPromptConfig) => Promise<void>;
   onGenerateEvaluationDoc: (
@@ -66,6 +67,7 @@ interface OutputTabsProps {
     tipo: TipoJuego,
     config: GenerationPromptConfig,
   ) => Promise<void>;
+  onRefineHtml5?: (instruction: string) => Promise<void>;
   onIterateArtifact: (
     targetDificultad: NivelDificultad,
     instruccionCambio: string,
@@ -130,10 +132,12 @@ export function OutputTabs({
   generateDocError,
   generatingGameType,
   generateGameError,
+  isRefiningHtml5 = false,
   onGenerateEsquema,
   onGenerateAndamiaje,
   onGenerateEvaluationDoc,
   onGenerateMiniApp,
+  onRefineHtml5,
   onIterateArtifact,
   onUpdateVerification,
   onSesionAttached,
@@ -604,7 +608,9 @@ export function OutputTabs({
           miniApps={studyPack.mini_apps}
           generatingGameType={generatingGameType}
           generateGameError={generateGameError}
+          isRefiningHtml5={isRefiningHtml5}
           onGenerateMiniApp={onGenerateMiniApp}
+          onRefineHtml5={onRefineHtml5}
           onRetoPublished={onRetoPublished}
         />
       )}

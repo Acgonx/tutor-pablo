@@ -10,7 +10,10 @@ import {
   Printer,
   Share2,
   SlidersHorizontal,
+  Sparkles,
+  Wand2,
 } from 'lucide-react';
+import { getTipologiasPorAsignatura } from '../../data/curriculumCanarias';
 import { isFirebaseConfigured } from '../../lib/firebase';
 import { createRetoPablo } from '../../services/retosService';
 import type { RetoPabloHydrated, TipoJuego } from '../../types/firestore';
@@ -33,10 +36,12 @@ interface MiniAppsTabProps {
   miniApps: MiniAppsBundle;
   generatingGameType: TipoJuego | null;
   generateGameError: string | null;
+  isRefiningHtml5?: boolean;
   onGenerateMiniApp: (
     tipo: TipoJuego,
     config: GenerationPromptConfig,
   ) => Promise<void>;
+  onRefineHtml5?: (instruction: string) => Promise<void>;
   onRetoPublished: (reto: RetoPabloHydrated) => void;
 }
 
@@ -78,38 +83,18 @@ const MINI_APP_TABS: ReadonlyArray<{
   },
   {
     tipo: 'html5_neon',
-    label: '5. Neon Arcade WOW',
-    desc: 'App HTML5 neón programada a medida',
-    countLabel: 'retos o niveles en el juego',
+    label: '5. Juego HTML5 WOW',
+    desc: 'Unir flechas, huecos, señalar en dibujo...',
+    countLabel: 'retos o fases en el juego',
     defaultCantidad: 6,
     isNeonWow: true,
   },
 ];
 
-const GAME_TIPOLOGIAS = [
-  'Con fórmulas matemáticas en LaTeX',
-  'Con figuras visuales / fracciones dibujadas',
-  'Cálculo mental rápido',
-  'Comprensión de definiciones y conceptos',
-  'Errores típicos para cazar la trampa',
-] as const;
-
-const NEON_TIPOLOGIAS = [
-  'Misión Arcade Neón (vidas, combo y racha)',
-  'Tablero interactivo táctil (pintar fracciones / geometría en SVG o Canvas)',
-  'Memory / Parejas Luminosas',
-  'Recta numérica o coordenadas láser',
-  'Duelo contrarreloj con feedback paso a paso',
-] as const;
-
-const GAME_SUGGESTIONS = [
-  'Pon preguntas visuales donde tenga que identificar la fracción dibujada en el círculo o barra.',
-  'Hazlo ágil y divertido con operaciones rápidas y errores típicos de signos.',
-] as const;
-
-const NEON_SUGGESTIONS = [
-  'Crea un juego neón donde Pablo pinte sectores de círculos/barras para construir la fracción pedida.',
-  'Haz una misión espacial cyberpunk con combos, partículas de neón y cálculo rápido.',
+const RETOUCH_SUGGESTIONS = [
+  'Haz las zonas y botones más grandes para el dedo en iPad.',
+  'Cambia la mecánica a unir con flechas de colores.',
+  'Añade pistas visuales paso a paso cuando falle un reto.',
 ] as const;
 
 function PrintableMiniAppSheet({
@@ -292,7 +277,7 @@ function PrintableMiniAppSheet({
       {payload.tipo_juego === 'html5_neon' && (
         <div className="print-avoid-break space-y-3 rounded-xl border border-slate-300 bg-slate-50 p-4 text-sm">
           <p className="font-bold text-slate-900">
-            Mini-App Interactiva HTML5 Neón: {payload.estilo_mecanica}
+            Mini-App Interactiva HTML5 (Efecto WOW): {payload.estilo_mecanica}
           </p>
           <p className="text-xs text-slate-600">
             Esta actividad es un juego visual interactivo tipo arcade diseñado para iPad o
@@ -321,7 +306,9 @@ export function MiniAppsTab({
   miniApps,
   generatingGameType,
   generateGameError,
+  isRefiningHtml5 = false,
   onGenerateMiniApp,
+  onRefineHtml5,
   onRetoPublished,
 }: MiniAppsTabProps) {
   const [selectedTipo, setSelectedTipo] = useState<
@@ -334,6 +321,7 @@ export function MiniAppsTab({
   const [openConfigFor, setOpenConfigFor] = useState<
     Partial<Record<TipoJuego, boolean>>
   >({});
+  const [retouchPrompt, setRetouchPrompt] = useState('');
 
   const [viewMode, setViewMode] = useState<'interactive' | 'printable'>('interactive');
   const [printAnswers, setPrintAnswers] = useState(false);
@@ -344,6 +332,19 @@ export function MiniAppsTab({
   const currentPublishedUrl = publishedLinks[selectedTipo];
   const isGeneratingThis = generatingGameType === selectedTipo;
   const isConfigOpen = !currentPayload || Boolean(openConfigFor[selectedTipo]);
+  const subjectPresets = getTipologiasPorAsignatura(asignatura);
+
+  async function handleRetouchSubmit() {
+    if (!onRefineHtml5 || !retouchPrompt.trim()) return;
+    setActionError(null);
+    await onRefineHtml5(retouchPrompt);
+    setRetouchPrompt('');
+    setPublishedLinks((prev) => {
+      const next = { ...prev };
+      delete next.html5_neon;
+      return next;
+    });
+  }
 
   async function handleGenerateSubmit(config: GenerationPromptConfig) {
     await onGenerateMiniApp(selectedTipo, config);
@@ -396,10 +397,10 @@ export function MiniAppsTab({
           const isActive = selectedTipo === tab.tipo;
           const isReady = Boolean(miniApps[tab.tipo]);
           const activeClass = tab.isNeonWow
-            ? 'border-cyan-400 bg-slate-950 text-cyan-200 shadow-[0_0_20px_rgba(34,211,238,0.28)]'
+            ? 'border-indigo-600 bg-gradient-to-br from-indigo-600 to-sky-600 text-white shadow-sm'
             : 'border-indigo-600 bg-indigo-600 text-white shadow-sm';
           const inactiveClass = tab.isNeonWow
-            ? 'border-cyan-300 bg-gradient-to-br from-slate-900 to-indigo-950 text-cyan-100 hover:border-cyan-400'
+            ? 'border-indigo-200 bg-gradient-to-br from-indigo-50/70 to-sky-50/70 text-slate-900 hover:border-indigo-400'
             : 'border-slate-200 bg-white text-slate-800 hover:border-indigo-300';
           return (
             <button
@@ -417,19 +418,13 @@ export function MiniAppsTab({
                 <p className="text-sm font-bold">{tab.label}</p>
                 {isReady && (
                   <CheckCircle2
-                    className={`h-4 w-4 ${
-                      isActive || tab.isNeonWow ? 'text-emerald-300' : 'text-emerald-600'
-                    }`}
+                    className={`h-4 w-4 ${isActive ? 'text-emerald-200' : 'text-emerald-600'}`}
                   />
                 )}
               </div>
               <p
                 className={`mt-0.5 text-xs ${
-                  tab.isNeonWow
-                    ? 'text-cyan-200/80'
-                    : isActive
-                      ? 'text-indigo-100'
-                      : 'text-slate-500'
+                  isActive ? 'text-indigo-100' : 'text-slate-500'
                 }`}
               >
                 {isReady ? `${tab.desc} · Lista` : `${tab.desc} · Sin generar`}
@@ -441,17 +436,25 @@ export function MiniAppsTab({
 
       {isConfigOpen && (
         <GeminiPromptBox
-          key={`${selectedTipo}_prompt`}
+          key={`${asignatura}_${selectedTipo}_prompt`}
           title={`Configurar ${activeMeta.label}`}
           subtitle={
             selectedTipo === 'html5_neon'
-              ? 'Elige el número de retos, la mecánica arcade/Canvas que quieres que programe Gemini en HTML5 Neón y cualquier detalle visual.'
+              ? 'Elige el número de retos, la mecánica interactiva (unir con flechas, escribir huecos, señalar en dibujo, arrastrar) y cualquier detalle visual.'
               : 'Elige cuántos ítems quieres en el juego, si incluyes LaTeX/figuras visuales y el enfoque.'
           }
           countLabel={activeMeta.countLabel}
           defaultCantidad={activeMeta.defaultCantidad}
-          tipologiaOptions={selectedTipo === 'html5_neon' ? NEON_TIPOLOGIAS : GAME_TIPOLOGIAS}
-          quickSuggestions={selectedTipo === 'html5_neon' ? NEON_SUGGESTIONS : GAME_SUGGESTIONS}
+          tipologiaOptions={
+            selectedTipo === 'html5_neon'
+              ? subjectPresets.html5Tipologias
+              : subjectPresets.miniAppTipologias
+          }
+          quickSuggestions={
+            selectedTipo === 'html5_neon'
+              ? subjectPresets.html5Sugerencias
+              : subjectPresets.miniAppSugerencias
+          }
           defaultDificultad={defaultDificultad}
           hasExistingContent={Boolean(currentPayload)}
           isGenerating={isGeneratingThis}
@@ -543,6 +546,62 @@ export function MiniAppsTab({
                 </button>
               </div>
             </div>
+
+            {selectedTipo === 'html5_neon' && onRefineHtml5 && (
+              <div className="rounded-xl border border-indigo-200 bg-indigo-50/50 p-3 text-xs">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="inline-flex items-center gap-1.5 font-bold text-indigo-950">
+                    <Wand2 className="h-3.5 w-3.5 text-indigo-600" />
+                    Retocar este juego HTML5 sin empezar de cero
+                  </span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {RETOUCH_SUGGESTIONS.map((s) => (
+                      <button
+                        key={s}
+                        type="button"
+                        onClick={() => setRetouchPrompt(s)}
+                        className="rounded-full border border-indigo-200 bg-white px-2.5 py-0.5 text-[11px] font-semibold text-indigo-700 hover:bg-indigo-100"
+                      >
+                        + {s}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+                  <input
+                    type="text"
+                    value={retouchPrompt}
+                    onChange={(ev) => setRetouchPrompt(ev.target.value)}
+                    onKeyDown={(ev) => {
+                      if (ev.key === 'Enter') {
+                        ev.preventDefault();
+                        void handleRetouchSubmit();
+                      }
+                    }}
+                    placeholder="Ej: Agranda los círculos, pon fondo blanco limpio o añade un nivel de unir con flechas..."
+                    className="flex-1 rounded-xl border border-indigo-200 bg-white px-3 py-2 text-xs text-slate-900 focus:border-indigo-500 focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    disabled={isRefiningHtml5 || isGeneratingThis || !retouchPrompt.trim()}
+                    onClick={() => void handleRetouchSubmit()}
+                    className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2 font-bold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+                  >
+                    {isRefiningHtml5 ? (
+                      <>
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        Retocando...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="h-3.5 w-3.5" />
+                        Aplicar retoque
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
 
             {viewMode === 'printable' && (
               <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-xs">

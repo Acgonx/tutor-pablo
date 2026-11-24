@@ -7,6 +7,7 @@ import {
   generateSingleEvaluationDoc,
   generateSingleMiniApp,
   iterateStudyPack,
+  refineHtml5Game,
 } from '../lib/gemini';
 import type { RawOcrResponse } from '../lib/gemini';
 import {
@@ -27,6 +28,7 @@ import type {
   GamePayload,
   GeneratedStudyPack,
   GenerationPromptConfig,
+  NeonHtmlPayload,
   NivelDificultad,
   TipoDocumentoEvaluacion,
 } from '../types/studyMaterial';
@@ -348,6 +350,46 @@ export async function runGenerateMiniApp(params: {
     mini_apps: {
       ...params.studyPack.mini_apps,
       [payload.tipo_juego]: payload,
+    },
+  };
+
+  let nextArtefacto = params.artefacto;
+  if (isFirebaseConfigured && params.artefacto) {
+    nextArtefacto = await updateArtefactoStudyPack({
+      artefacto: params.artefacto,
+      nextStudyPack: nextPack,
+    });
+    await syncSesionIfAttached(nextArtefacto, nextPack);
+  }
+
+  return { payload, nextPack, nextArtefacto };
+}
+
+export async function runRefineHtml5MiniApp(params: {
+  currentPayload: NeonHtmlPayload;
+  instruction: string;
+  studyPack: GeneratedStudyPack;
+  verification: OcrVerificationData;
+  artefacto: ArtefactoDoc | null;
+  availableLibretaErrors: LibretaErrorDoc[];
+}): Promise<{
+  payload: NeonHtmlPayload;
+  nextPack: GeneratedStudyPack;
+  nextArtefacto: ArtefactoDoc | null;
+}> {
+  const invoked = resolveInvoked(params.verification, params.availableLibretaErrors);
+  const payload = await refineHtml5Game({
+    currentPayload: params.currentPayload,
+    instruction: params.instruction,
+    verification: params.verification,
+    libretaErrores: invoked,
+  });
+
+  const nextPack: GeneratedStudyPack = {
+    ...params.studyPack,
+    mini_apps: {
+      ...params.studyPack.mini_apps,
+      html5_neon: payload,
     },
   };
 

@@ -93,18 +93,18 @@ export function NeonHtmlGame({ payload, onComplete }: NeonHtmlGameProps) {
     <div
       className={
         isFullscreen
-          ? 'fixed inset-0 z-50 flex flex-col bg-[#050816] p-3 sm:p-4'
-          : 'overflow-hidden rounded-2xl border border-cyan-500/40 bg-[#050816] p-2.5 shadow-[0_0_28px_rgba(34,211,238,0.16)]'
+          ? 'fixed inset-0 z-50 flex flex-col bg-slate-900/95 p-3 sm:p-4'
+          : 'overflow-hidden rounded-2xl border border-indigo-200 bg-gradient-to-br from-indigo-50/80 via-white to-sky-50/80 p-2.5 shadow-sm'
       }
     >
-      <div className="mb-2 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-cyan-500/25 bg-slate-950/90 px-3 py-2 text-xs text-cyan-100">
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-indigo-200 bg-white px-3 py-2 text-xs text-slate-800 shadow-2xs">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="inline-flex items-center gap-1 rounded-full bg-cyan-500/20 px-2.5 py-0.5 font-bold text-cyan-300 ring-1 ring-cyan-400/40">
-            <Sparkles className="h-3.5 w-3.5" />
-            HTML5 NEÓN ARCADE
+          <span className="inline-flex items-center gap-1 rounded-full bg-indigo-100 px-2.5 py-0.5 font-bold text-indigo-800">
+            <Sparkles className="h-3.5 w-3.5 text-indigo-600" />
+            HTML5 INTERACTIVO · WOW
           </span>
           {payload.estilo_mecanica && (
-            <span className="font-semibold text-fuchsia-300">
+            <span className="font-semibold text-slate-600">
               {payload.estilo_mecanica}
             </span>
           )}
@@ -114,7 +114,7 @@ export function NeonHtmlGame({ payload, onComplete }: NeonHtmlGameProps) {
           <button
             type="button"
             onClick={() => setIframeKey((k) => k + 1)}
-            className="inline-flex items-center gap-1 rounded-lg border border-cyan-500/30 bg-slate-900 px-2.5 py-1 font-semibold text-cyan-200 hover:bg-slate-800"
+            className="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1 font-semibold text-slate-700 hover:bg-slate-50"
           >
             <RotateCcw className="h-3.5 w-3.5" />
             Reiniciar juego
@@ -122,7 +122,7 @@ export function NeonHtmlGame({ payload, onComplete }: NeonHtmlGameProps) {
           <button
             type="button"
             onClick={() => setIsFullscreen((prev) => !prev)}
-            className="inline-flex items-center gap-1 rounded-lg bg-fuchsia-600/80 px-2.5 py-1 font-bold text-white hover:bg-fuchsia-500"
+            className="inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-2.5 py-1 font-bold text-white hover:bg-indigo-700"
           >
             {isFullscreen ? (
               <>
@@ -145,7 +145,7 @@ export function NeonHtmlGame({ payload, onComplete }: NeonHtmlGameProps) {
         title={payload.titulo}
         srcDoc={payload.html_completo}
         sandbox="allow-scripts"
-        className={`w-full rounded-xl border border-cyan-500/20 bg-[#050816] ${
+        className={`w-full rounded-xl border border-indigo-200 bg-white ${
           isFullscreen ? 'flex-1' : 'h-[620px] sm:h-[680px]'
         }`}
       />

@@ -179,8 +179,8 @@ export const FUENTES_DOCUMENTO: ReadonlyArray<{
   },
   {
     value: 'indice_temario',
-    label: 'Índice del libro / Temario',
-    descripcion: 'Foto o texto con el índice de apartados para elegir qué practicar hoy.',
+    label: 'Índice del libro / Programación didáctica',
+    descripcion: 'Foto o texto del índice o programación para elegir qué apartados practicar hoy.',
   },
   {
     value: 'mixto',
@@ -197,4 +197,199 @@ export function getAsignaturaByNombre(nombre: string): AsignaturaCurricular | un
       item.nombreCorto.toLowerCase() === normalized ||
       item.id.toLowerCase() === normalized,
   );
+}
+
+export interface SubjectTipologiaPreset {
+  evaluacionTipologias: string[];
+  evaluacionSugerencias: string[];
+  miniAppTipologias: string[];
+  miniAppSugerencias: string[];
+  html5Tipologias: string[];
+  html5Sugerencias: string[];
+}
+
+export function getTipologiasPorAsignatura(asignatura: string): SubjectTipologiaPreset {
+  const id = getAsignaturaByNombre(asignatura)?.id ?? 'matematicas';
+
+  switch (id) {
+    case 'lengua_castellana':
+      return {
+        evaluacionTipologias: [
+          'Análisis morfológico / sintáctico en tabla',
+          'Ortografía y acentuación (completar o corregir)',
+          'Comprensión lectora con texto breve',
+          'Tipología textual / redacción guiada',
+          'Vocabulario, sinónimos y variedad canaria',
+          'Preguntas conceptuales de gramática o literatura',
+        ],
+        evaluacionSugerencias: [
+          'Incluye una tabla de análisis morfológico con filas en blanco para que Pablo la complete.',
+          'Pon un texto corto con 4 preguntas de comprensión, acentuación y categorías gramaticales.',
+        ],
+        miniAppTipologias: [
+          'Clasificar categorías gramaticales o tipos de palabras',
+          'Reglas de acentuación y ortografía',
+          'Detectar errores gramaticales o de puntuación',
+          'Definiciones literarias y recursos expresivos',
+        ],
+        miniAppSugerencias: [
+          'Haz preguntas ágiles para distinguir agudas, llanas, esdrújulas y categorías gramaticales.',
+          'Usa ejemplos cercanos y errores típicos de redacción en 1º ESO.',
+        ],
+        html5Tipologias: [
+          'Unir con flechas (palabra ↔ categoría o recurso literario)',
+          'Rellenar huecos escribiendo tildes o palabras correctas',
+          'Señalar / subrayar palabras clave dentro de una oración',
+          'Arrastrar y ordenar fragmentos de un texto o análisis',
+        ],
+        html5Sugerencias: [
+          'Juego de unir con flechas cada palabra o ejemplo con su categoría y otro nivel de rellenar huecos con tilde.',
+          'Actividad interactiva donde Pablo señala el sujeto/núcleo o clasifica palabras tocando bloques.',
+        ],
+      };
+
+    case 'ingles':
+    case 'segunda_lengua_extranjera':
+      return {
+        evaluacionTipologias: [
+          'Completar huecos (verbos, tiempos o vocabulario)',
+          'Construir o transformar oraciones (afirmativa/negativa/pregunta)',
+          'Reading comprehension breve con preguntas',
+          'Vocabulario cotidiano y expresiones',
+          'Traducir frases cortas o corregir errores típicos',
+        ],
+        evaluacionSugerencias: [
+          'Combina 2 ejercicios de fill-in-the-blanks, 2 de ordenar/transformar frases y 1 reading corto.',
+          'Insiste en Present Simple vs Continuous o verbo to be / have got según el tema.',
+        ],
+        miniAppTipologias: [
+          'Gramática práctica (tiempos verbales y partículas)',
+          'Vocabulario y falsos amigos',
+          'Detectar el fallo gramatical típico en una frase',
+          'Comprensión rápida en contexto real',
+        ],
+        miniAppSugerencias: [
+          'Frases cotidianas de 12 años con explicaciones claras en español cuando falle.',
+          'Mezcla huecos rápidos con errores frecuentes de tercera persona o auxiliares.',
+        ],
+        html5Tipologias: [
+          'Unir con flechas (English ↔ Español o pregunta ↔ respuesta)',
+          'Rellenar huecos escribiendo la forma verbal correcta',
+          'Ordenar palabras clicando fichas para formar la oración',
+          'Señalar el error dentro de la frase en inglés',
+        ],
+        html5Sugerencias: [
+          'Juego de construir oraciones ordenando tarjetas y otro bloque de unir con flechas vocabulario del tema.',
+          'Práctica interactiva de rellenar huecos con autocorrección instantánea y puntuación.',
+        ],
+      };
+
+    case 'biologia_geologia':
+      return {
+        evaluacionTipologias: [
+          'Diagrama / dibujo SVG para señalar partes',
+          'Tabla comparativa para completar (ej. células, reinos, rocas)',
+          'Cuestiones del método científico y experimentos',
+          'Situación contextualizada en ecosistemas o vulcanismo de Canarias',
+          'Preguntas conceptuales y definiciones clave',
+        ],
+        evaluacionSugerencias: [
+          'Incluye un dibujo/esquema SVG limpio con partes para identificar o completar.',
+          'Pon una tabla comparativa con filas vacías para Pablo y un caso práctico del entorno canario.',
+        ],
+        miniAppTipologias: [
+          'Con diagramas o esquemas visuales SVG',
+          'Clasificar organismos, rocas o funciones vitales',
+          'Cazar afirmaciones científicas falsas o mitos',
+          'Vocabulario científico y definiciones',
+        ],
+        miniAppSugerencias: [
+          'Relaciona estructuras celulares, reinos o tipos de rocas con ejemplos claros de Canarias.',
+          'Incluye pistas visuales que ayuden a memorizar diferencias clave.',
+        ],
+        html5Tipologias: [
+          'Apuntar y señalar partes directamente sobre un diagrama SVG',
+          'Unir con flechas (órgano / estructura ↔ función)',
+          'Arrastrar o clasificar tarjetas en grupos biológicos',
+          'Completar un esquema o ciclo escribiendo conceptos clave',
+        ],
+        html5Sugerencias: [
+          'Diagrama interactivo en SVG donde Pablo señala cada parte al hacer clic sobre el dibujo.',
+          'Juego de unir con flechas estructuras y funciones con feedback explicativo.',
+        ],
+      };
+
+    case 'geografia_historia':
+      return {
+        evaluacionTipologias: [
+          'Mapa o esquema visual SVG (relieve, climas o civilización)',
+          'Línea del tiempo / orden cronológico y tabla de etapas',
+          'Interpretación de fuentes históricas, gráficos o climogramas',
+          'Situación contextualizada con patrimonio o geografía de Canarias',
+          'Preguntas de causas, consecuencias y vocabulario histórico',
+        ],
+        evaluacionSugerencias: [
+          'Incluye un esquema o mapa mudo en SVG para localizar elementos y una tabla de etapas.',
+          'Contextualiza con ejemplos de Canarias (relieve insular, climas o historia aborigen) cuando encaje.',
+        ],
+        miniAppTipologias: [
+          'Con mapas o esquemas visuales SVG',
+          'Ubicar hechos y etapas históricas',
+          'Detectar anacronismos o errores históricos/geográficos',
+          'Vocabulario geográfico e histórico',
+        ],
+        miniAppSugerencias: [
+          'Caza anacronismos o confusiones entre etapas, ríos, climas y mapas.',
+          'Haz preguntas dinámicas con referencias visuales claras.',
+        ],
+        html5Tipologias: [
+          'Apuntar y señalar zonas en un mapa o esquema SVG interactivo',
+          'Unir con flechas (etapa / lugar ↔ característica o hecho)',
+          'Línea del tiempo interactiva (colocar hitos en orden)',
+          'Rellenar huecos sobre un esquema geográfico o histórico',
+        ],
+        html5Sugerencias: [
+          'Mapa o esquema interactivo donde Pablo señala accidentes geográficos o zonas históricas.',
+          'Juego de unir con flechas etapas históricas, personajes o climas con su descripción.',
+        ],
+      };
+
+    case 'matematicas':
+    default:
+      return {
+        evaluacionTipologias: [
+          'Pintar / representar fracciones (barras o círculos)',
+          'Cálculo y operaciones (LaTeX)',
+          'Problemas contextualizados de la vida real',
+          'Geometría con figuras y medidas',
+          'Recta numérica / Coordenadas',
+          'Tablas de datos / proporcionalidad',
+        ],
+        evaluacionSugerencias: [
+          'Incluye 2 ejercicios de colorear fracciones en círculos y barras, 2 operaciones y 1 problema.',
+          'Pon figuras geométricas con sus medidas para calcular área y perímetro.',
+        ],
+        miniAppTipologias: [
+          'Con fórmulas matemáticas en LaTeX',
+          'Con figuras visuales / fracciones dibujadas',
+          'Cálculo mental rápido',
+          'Comprensión de definiciones y conceptos',
+          'Errores típicos para cazar la trampa',
+        ],
+        miniAppSugerencias: [
+          'Pon preguntas visuales donde tenga que identificar la fracción dibujada en el círculo o barra.',
+          'Hazlo ágil y divertido con operaciones rápidas y errores típicos de signos.',
+        ],
+        html5Tipologias: [
+          'Pintar o seleccionar partes en figuras / fracciones interactivas',
+          'Unir con flechas (operación o fracción equivalente ↔ resultado)',
+          'Escribir la respuesta numérica o completar huecos paso a paso',
+          'Apuntar en recta numérica o plano cartesiano interactivo',
+        ],
+        html5Sugerencias: [
+          'Juego interactivo luminoso donde Pablo pinta fracciones en círculos/barras y resuelve retos paso a paso.',
+          'Actividad de unir con flechas fracciones equivalentes o resultados y escribir respuestas en huecos.',
+        ],
+      };
+  }
 }

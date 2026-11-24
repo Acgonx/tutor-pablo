@@ -1,6 +1,7 @@
 import { GoogleGenAI, Type } from '@google/genai';
 import type { Part, Schema } from '@google/genai';
 import { getAsignaturaByNombre } from '../data/curriculumCanarias';
+import { GEMINI_MODEL, isGeminiConfigured } from './envConfig';
 import type { LibretaErrorDoc, TipoJuego } from '../types/firestore';
 import type {
   FuenteDocumento,
@@ -26,9 +27,7 @@ import type {
   TriviaRetoPayload,
 } from '../types/studyMaterial';
 
-export const GEMINI_MODEL = import.meta.env.VITE_GEMINI_MODEL?.trim() || 'gemini-3.8-flash';
-
-export const isGeminiConfigured = Boolean(import.meta.env.VITE_GEMINI_API_KEY?.trim());
+export { GEMINI_MODEL, isGeminiConfigured };
 
 /**
  * Skill pedagógica integrada ("Ejercicios 1º ESO Canarias") con LaTeX (KaTeX) y figuras visuales.
@@ -991,20 +990,23 @@ export async function generateSingleMiniApp(params: {
     params.tipoJuego === 'ordenar_pasos' ? 'caza_error' : params.tipoJuego;
 
   if (effectiveTipo === 'html5_neon') {
-    const prompt = `Programa una **Mini-App HTML5 tipo WOW con estética NEÓN CYBER-ARCADE** completamente autocontenida en un único archivo HTML5 ("html_completo") con exactamente ${params.config.cantidad} retos/fases/ejercicios para Pablo (1º de ESO Canarias, 12 años).
+    const prompt = `Programa una **Mini-App educativa interactiva en HTML5 (efecto WOW)** completamente autocontenida en un único archivo HTML5 ("html_completo") con exactamente ${params.config.cantidad} retos/actividades progresivos para Pablo (1º de ESO Canarias, 12 años).
 
 ${cfg}
 
 REQUISITOS DE DISEÑO Y PROGRAMACIÓN DE "html_completo":
 1. Documento único válido \`<!DOCTYPE html><html lang="es">...</html>\` con \`<style>\` y \`<script>\` embebidos (100% funcional offline sin depender de CDNs externos obligatorios, ideal para iframe y Safari iPad).
-2. ESTÉTICA NEÓN WOW: fondo oscuro espacial/cyber (\`#050816\` con rejilla o brillo radial sutil), tarjetas translúcidas glassmorphism, bordes y botones neón (\`#22d3ee\` cian, \`#e879f9\` magenta, \`#4ade80\` verde neón, \`#facc15\` dorado), tipografía clara legible (\`system-ui, sans-serif\`), barra de progreso animada, contador de combo/racha, botón visible de silencio/sonido con efectos sutiles en Web Audio API (activados solo tras clic del alumno).
-3. MECÁNICA REALMENTE JUGABLE Y DIVERTIDA (NO un formulario aburrido):
-   - Adapta la mecánica al tema y a lo pedido por el docente (por ejemplo: pintor interactivo de fracciones en SVG/Canvas donde Pablo hace clic en porciones para colorearlas y comprueba su fracción; nave/escudo espacial con opciones o teclado táctil numérico; juego de parejas luminosas / memory; recta numérica láser interactiva; duelo contrarreloj visual).
-   - Incluye SVG dinámicos o Canvas nítidos cuando el tema tenga fracciones, geometría, gráficas o diagramas.
+2. DISEÑO VISUAL MODERNO, LUMINOSO Y MOTIVADOR (NO uses estética oscura ni neón salvo que el usuario lo pida): fondo limpio luminoso o degradado suave educativo (por ejemplo blanco, azul cielo muy suave o índigo claro), tarjetas con relieve limpio y bordes redondeados, colores vivos accesibles (índigo, esmeralda, ámbar, cielo), barra de progreso visual, contador de aciertos/racha y micro-animaciones suaves al acertar (celebración o confeti ligero CSS/Canvas).
+3. MECÁNICAS INTERACTIVAS REALES TIPO "EFECTO WOW" (NO hagas un simple test aburrido):
+   - Elige e implementa la mecánica más divertida para este tema y para lo pedido por el docente, combinando interacciones ricas como:
+     • **Unir con flechas / líneas SVG** (toca un elemento de la izquierda y su pareja de la derecha y se traza una línea animada entre ambos, funciona perfecto con el dedo en iPad).
+     • **Escribir / rellenar huecos interactivos** (cajas inline dentro de frases, operaciones o definiciones con comprobación inteligente de respuesta).
+     • **Apuntar y señalar** directamente sobre un dibujo, mapa, diagrama SVG, recta numérica o plano cartesiano (el alumno toca la zona o punto correcto).
+     • **Pintar o construir** (ej. tocar sectores de círculos o barras para representar fracciones, o construir una oración tocando fichas).
    - Para matemáticas, renderiza fracciones apiladas o potencias de forma impecable con HTML/CSS (\`<span class="frac"><span class="num">3</span><span class="den">4</span></span>\`, \`<sup>\`, \`×\`, \`÷\`, \`√\`, \`π\`), nunca dejes símbolos LaTeX crudos \`$...$\` sin formatear en pantalla.
-4. FEEDBACK INMEDIATO PEDAGÓGICO: tras cada respuesta, explica brevemente *por qué* es correcta o el truco para corregir el fallo antes de pasar al siguiente reto.
+4. FEEDBACK INMEDIATO PEDAGÓGICO: tras cada respuesta o verificación, explica brevemente *por qué* es correcta o da una pista clara para corregir el error antes de avanzar.
 5. PANTALLA FINAL + TELEMETRÍA OBLIGATORIA PARA TUTOR PABLO:
-   - Al terminar los ${params.config.cantidad} retos, muestra una pantalla final luminosa con puntuación (%), racha máxima, resumen de aciertos/fallos y botón "Volver a jugar".
+   - Al terminar los ${params.config.cantidad} retos, muestra un resumen visual limpio con puntuación (%), racha máxima, aciertos/fallos y botón "Volver a jugar".
    - Justo al completarse la partida, ejecuta OBLIGATORIAMENTE este envío al padre:
      \`\`\`js
      if (window.parent && window.parent !== window) {
@@ -1019,7 +1021,7 @@ REQUISITOS DE DISEÑO Y PROGRAMACIÓN DE "html_completo":
        }, '*');
      }
      \`\`\`
-6. IMPORTANTE: Asegúrate de que TODO el JavaScript sea sintácticamente válido, sin errores, táctil (botones >= 44px para iPad) y no uses \`alert()\` ni \`prompt()\`.
+6. IMPORTANTE: Asegúrate de que TODO el JavaScript sea sintácticamente válido, sin errores de consola, táctil (botones/zonas >= 44px para iPad, sin depender de arrastrar complejo HTML5 que falla en iOS — usa tap-to-select + tap-to-place o Pointer Events) y no uses \`alert()\` ni \`prompt()\`.
 
 ${context}`;
 
@@ -1027,10 +1029,10 @@ ${context}`;
       model: GEMINI_MODEL,
       contents: [{ text: prompt }],
       config: {
-        systemInstruction: `${CUSTOM_PEDAGOGICAL_SKILL}\n\nEres un experto ingeniero creativo de videojuegos educativos HTML5/CSS3/Canvas con estética neón para adolescentes de 12 años (1º ESO).`,
+        systemInstruction: `${CUSTOM_PEDAGOGICAL_SKILL}\n\nEres un experto diseñador e ingeniero creativo de aplicaciones web educativas HTML5/CSS3/SVG altamente interactivas y visuales para estudiantes de 1º de ESO (12 años) en iPad.`,
         responseMimeType: 'application/json',
         responseSchema: neonHtmlSchema,
-        temperature: 0.65,
+        temperature: 0.6,
       },
     });
 
@@ -1067,6 +1069,53 @@ ${context}`;
 
   const parsed = parseJsonResponse<GamePayload>(response.text);
   return sanitizeGamePayload(parsed);
+}
+
+/**
+ * Retoca una mini-app HTML5 interactiva ya generada aplicando un ajuste concreto del docente
+ * sin descartar la estructura o mecánica que ya funciona.
+ */
+export async function refineHtml5Game(params: {
+  currentPayload: NeonHtmlPayload;
+  instruction: string;
+  verification: OcrVerificationData;
+  libretaErrores: LibretaErrorDoc[];
+}): Promise<NeonHtmlPayload> {
+  if (!params.instruction.trim()) {
+    throw new Error('Escribe qué retoque o cambio quieres aplicar sobre el juego HTML5.');
+  }
+
+  const ai = getGenAIClient();
+  const context = buildPedagogicalContext(params.verification, params.libretaErrores);
+
+  const prompt = `Tienes este juego educativo HTML5 ya creado y el docente pide un RETOQUE PUNTUAL sin empezar de cero ni romper lo que ya funciona:
+
+=== INSTRUCCIÓN DE RETOQUE DEL DOCENTE ===
+${params.instruction.trim()}
+
+=== HTML5 ACTUAL A MODIFICAR ===
+${params.currentPayload.html_completo}
+
+REGLAS:
+1. Conserva la estructura general y el tema ("${params.currentPayload.titulo}"), aplicando exactamente el cambio pedido.
+2. Mantén el diseño limpio, táctil para iPad (botones >= 44px) y el envío obligatorio \`window.parent.postMessage({ source: 'tutor-pablo-neon', completed: true, puntuacion, aciertos, total, fallos, interacciones }, '*')\` al terminar la partida.
+3. Devuelve el JSON completo con el HTML5 actualizado en "html_completo".
+
+${context}`;
+
+  const response = await ai.models.generateContent({
+    model: GEMINI_MODEL,
+    contents: [{ text: prompt }],
+    config: {
+      systemInstruction: `${CUSTOM_PEDAGOGICAL_SKILL}\n\nEres especialista en refinar mini-apps educativas HTML5/CSS3/JS manteniendo compatibilidad táctil con iPad.`,
+      responseMimeType: 'application/json',
+      responseSchema: neonHtmlSchema,
+      temperature: 0.4,
+    },
+  });
+
+  const parsed = parseJsonResponse<NeonHtmlPayload>(response.text);
+  return sanitizeGamePayload(parsed) as NeonHtmlPayload;
 }
 
 /**
