@@ -344,6 +344,34 @@ export function buildStandaloneHtml(params: {
           if (spec.medidas && spec.medidas.length) {
             inner += '<div style="font-size:12px;margin-top:4px">' + spec.medidas.map(function (m) { return '<strong>' + esc(m.etiqueta) + ':</strong> ' + esc(m.valor); }).join(' · ') + '</div>';
           }
+        } else if (spec.tipo === 'diagrama_capas' && spec.capas && spec.capas.length) {
+          var caps = spec.capas.slice(0, 7);
+          var pal = ['#93c5fd', '#fdba74', '#fca5a5', '#fde047', '#86efac', '#c4b5fd'];
+          var ch = Math.max(170, caps.length * 34 + 24);
+          inner = '<svg viewBox="0 0 420 ' + ch + '" style="width:100%;max-width:420px">';
+          caps.forEach(function (c, ci) {
+            var y = 12 + ci * 32;
+            inner += '<rect x="12" y="' + y + '" width="150" height="26" rx="6" fill="' + (c.color || pal[ci % pal.length]) + '" stroke="#1e293b" stroke-width="1.5"/>';
+            inner += '<text x="22" y="' + (y + 17) + '" font-size="11" font-weight="700" fill="#0f172a">' + (ci + 1) + '</text>';
+            inner += '<line x1="162" y1="' + (y + 13) + '" x2="210" y2="' + (y + 13) + '" stroke="#475569" stroke-width="1.4" stroke-dasharray="3 2"/>';
+            inner += '<rect x="210" y="' + y + '" width="198" height="26" rx="6" fill="' + (shaded ? '#ecfdf5' : '#fff') + '" stroke="#94a3b8"/>';
+            inner += '<text x="218" y="' + (y + 17) + '" font-size="10.5" font-weight="700" fill="' + (shaded ? '#065f46' : '#64748b') + '">' + (shaded ? esc((ci + 1) + '. ' + c.nombre) : (ci + 1) + '. ___________________') + '</text>';
+          });
+          inner += '</svg>';
+        } else if (spec.tipo === 'tabla_datos' && spec.columnas && spec.columnas.length) {
+          inner = '<table style="width:100%;border-collapse:collapse;font-size:12px;background:#fff"><thead><tr>' +
+            spec.columnas.map(function (col) { return '<th style="border:1px solid #cbd5e1;padding:6px;background:#f1f5f9">' + esc(col) + '</th>'; }).join('') +
+            '</tr></thead><tbody>' +
+            (spec.filas_tabla || []).map(function (row) {
+              return '<tr>' + spec.columnas.map(function (_, ci) {
+                var val = String(row[ci] || '').trim();
+                var m = val.match(/^\\{\\{([\\s\\S]+)\\}\\}$/);
+                if (m || /^\\[.*(completar|alumno|espacio).*\\]$/i.test(val)) {
+                  return '<td style="border:1px solid #cbd5e1;padding:6px;height:26px">' + (shaded && m ? esc(m[1]) : '') + '</td>';
+                }
+                return '<td style="border:1px solid #cbd5e1;padding:6px">' + esc(val) + '</td>';
+              }).join('') + '</tr>';
+            }).join('') + '</tbody></table>';
         }
         if (!inner) return '';
         return '<div style="margin:12px 0;padding:10px;border:1px solid #cbd5e1;border-radius:12px;background:#f8fafc;text-align:center">' +

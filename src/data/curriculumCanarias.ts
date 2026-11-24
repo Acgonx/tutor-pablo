@@ -287,8 +287,9 @@ export function getTipologiasPorAsignatura(asignatura: string): SubjectTipologia
     case 'biologia_geologia':
       return {
         evaluacionTipologias: [
-          'Diagrama / dibujo SVG para señalar partes',
-          'Tabla comparativa para completar (ej. células, reinos, rocas)',
+          'Diagrama de capas (Tierra / Geosfera / Atmósfera / Célula)',
+          'Dibujo / esquema visual con partes para señalar',
+          'Tabla comparativa para completar (células, reinos, rocas...)',
           'Cuestiones del método científico y experimentos',
           'Situación contextualizada en ecosistemas o vulcanismo de Canarias',
           'Preguntas conceptuales y definiciones clave',
@@ -322,11 +323,11 @@ export function getTipologiasPorAsignatura(asignatura: string): SubjectTipologia
     case 'geografia_historia':
       return {
         evaluacionTipologias: [
-          'Mapa o esquema visual SVG (relieve, climas o civilización)',
-          'Línea del tiempo / orden cronológico y tabla de etapas',
+          'Línea del tiempo / orden cronológico para completar',
+          'Mapa o diagrama de capas / relieve para señalar partes',
           'Interpretación de fuentes históricas, gráficos o climogramas',
           'Situación contextualizada con patrimonio o geografía de Canarias',
-          'Preguntas de causas, consecuencias y vocabulario histórico',
+          'Tablas comparativas de etapas, causas y consecuencias',
         ],
         evaluacionSugerencias: [
           'Incluye un esquema o mapa mudo en SVG para localizar elementos y una tabla de etapas.',

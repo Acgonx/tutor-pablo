@@ -100,6 +100,37 @@ export async function prepareImageFile(file: File): Promise<UploadedImageItem> {
   }
 }
 
+/**
+ * Reduce y comprime una imagen generada por IA a JPEG liviano (~40-80 KB)
+ * para incrustarla en artefactos de Firestore e imprimir con nitidez.
+ */
+export async function compressGeneratedDataUrl(
+  base64Data: string,
+  mimeType = 'image/png',
+  maxDimension = 760,
+): Promise<string> {
+  const srcUrl = `data:${mimeType};base64,${base64Data}`;
+  const img = await loadImageElement(srcUrl);
+  const scale = Math.min(1, maxDimension / Math.max(img.width, img.height));
+  const targetWidth = Math.max(1, Math.round(img.width * scale));
+  const targetHeight = Math.max(1, Math.round(img.height * scale));
+
+  const canvas = document.createElement('canvas');
+  canvas.width = targetWidth;
+  canvas.height = targetHeight;
+
+  const ctx = canvas.getContext('2d');
+  if (!ctx) {
+    return srcUrl;
+  }
+
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, targetWidth, targetHeight);
+  ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
+
+  return canvas.toDataURL('image/jpeg', 0.82);
+}
+
 export function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;

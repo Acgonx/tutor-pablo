@@ -15,13 +15,16 @@ import {
   upsertLibretaError,
 } from '../services/libretaErroresService';
 import {
+  generateEducationalImage,
   initializeArtifactFromVerification,
   runGenerateAndamiaje,
   runGenerateEsquema,
   runGenerateEvaluationDoc,
+  runGenerateFreeDocument,
   runGenerateMiniApp,
   runIterateArtifact,
   runRefineHtml5MiniApp,
+  runSaveStudyPackEdit,
   runStep1OcrAnalysis,
   runStep1TextIndexAnalysis,
 } from '../services/pedagogicalEngine';
@@ -36,7 +39,10 @@ import type {
 import type { FuenteDocumento, OcrVerificationData, UploadedImageItem } from '../types/ocr';
 import type {
   ArtefactoDoc,
+  EsquemaVisualData,
   EstadoArtefacto,
+  ExamenPdfData,
+  ExplicacionAndamiajeData,
   GeneratedStudyPack,
   GenerationPromptConfig,
   NivelDificultad,
@@ -104,7 +110,7 @@ export function TeacherDashboardPage() {
   const [andamiajeError, setAndamiajeError] = useState<string | null>(null);
 
   const [generatingDocType, setGeneratingDocType] =
-    useState<TipoDocumentoEvaluacion | null>(null);
+    useState<TipoDocumentoEvaluacion | 'documento_libre' | null>(null);
   const [generateDocError, setGenerateDocError] = useState<string | null>(null);
 
   const [generatingGameType, setGeneratingGameType] = useState<TipoJuego | null>(null);
@@ -488,6 +494,86 @@ export function TeacherDashboardPage() {
     }
   }
 
+  async function handleGenerateFreeDoc(config: GenerationPromptConfig) {
+    if (!studyPack || !verification) return;
+    setGenerateDocError(null);
+    setGeneratingDocType('documento_libre');
+    try {
+      const outcome = await runGenerateFreeDocument({
+        studyPack,
+        verification,
+        artefacto: activeArtefacto,
+        availableLibretaErrors: libretaItems,
+        config,
+      });
+      setStudyPack(outcome.nextPack);
+      syncArtefactoState(outcome.nextArtefacto);
+    } catch (error) {
+      setGenerateDocError(
+        error instanceof Error
+          ? error.message
+          : 'No se pudo generar el Documento Libre Gemini.',
+      );
+    } finally {
+      setGeneratingDocType(null);
+    }
+  }
+
+  async function handleSaveStudyPackEdit(
+    nextPack: GeneratedStudyPack,
+    syncStudentSession = false,
+  ) {
+    setStudyPack(nextPack);
+    const updated = await runSaveStudyPackEdit({
+      nextPack,
+      artefacto: activeArtefacto,
+      syncStudentSession,
+    });
+    syncArtefactoState(updated);
+  }
+
+  async function handleUpdateEsquema(nextEsquema: EsquemaVisualData) {
+    if (!studyPack) return;
+    await handleSaveStudyPackEdit(
+      { ...studyPack, esquema_visual: nextEsquema },
+      true,
+    );
+  }
+
+  async function handleUpdateAndamiaje(nextAndamiaje: ExplicacionAndamiajeData) {
+    if (!studyPack) return;
+    await handleSaveStudyPackEdit(
+      { ...studyPack, explicacion_andamiaje: nextAndamiaje },
+      true,
+    );
+  }
+
+  async function handleUpdateEvaluationDoc(
+    tipoDoc: TipoDocumentoEvaluacion,
+    nextDoc: ExamenPdfData,
+  ) {
+    if (!studyPack) return;
+    await handleSaveStudyPackEdit({
+      ...studyPack,
+      evaluacion_y_fichas: {
+        ...studyPack.evaluacion_y_fichas,
+        [tipoDoc]: nextDoc,
+      },
+    });
+  }
+
+  async function handleGenerateImageForContext(
+    enunciado: string,
+    isStudentBlank = false,
+  ): Promise<string> {
+    return generateEducationalImage({
+      asignatura: studyPack?.asignatura || asignatura,
+      tema: studyPack?.tema || verification?.tema || 'Tema 1º ESO',
+      enunciado,
+      isStudentBlank,
+    });
+  }
+
   async function handleGenerateMiniApp(
     tipoJuego: TipoJuego,
     config: GenerationPromptConfig,
@@ -839,6 +925,11 @@ export function TeacherDashboardPage() {
               onGenerateEsquema={handleGenerateEsquema}
               onGenerateAndamiaje={handleGenerateAndamiaje}
               onGenerateEvaluationDoc={handleGenerateEvaluationDoc}
+              onGenerateFreeDoc={handleGenerateFreeDoc}
+              onUpdateEsquema={handleUpdateEsquema}
+              onUpdateAndamiaje={handleUpdateAndamiaje}
+              onUpdateEvaluationDoc={handleUpdateEvaluationDoc}
+              onGenerateImage={handleGenerateImageForContext}
               onGenerateMiniApp={handleGenerateMiniApp}
               onRefineHtml5={handleRefineHtml5MiniApp}
               onIterateArtifact={handleIterateArtifact}

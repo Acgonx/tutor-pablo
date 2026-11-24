@@ -25,6 +25,9 @@ import type { LibretaErrorDoc, RetoPabloHydrated, TipoJuego } from '../../types/
 import type { OcrVerificationData } from '../../types/ocr';
 import type {
   ArtefactoDoc,
+  EsquemaVisualData,
+  ExamenPdfData,
+  ExplicacionAndamiajeData,
   GeneratedStudyPack,
   GenerationPromptConfig,
   NivelDificultad,
@@ -52,7 +55,7 @@ interface OutputTabsProps {
   esquemaError: string | null;
   isGeneratingAndamiaje: boolean;
   andamiajeError: string | null;
-  generatingDocType: TipoDocumentoEvaluacion | null;
+  generatingDocType: TipoDocumentoEvaluacion | 'documento_libre' | null;
   generateDocError: string | null;
   generatingGameType: TipoJuego | null;
   generateGameError: string | null;
@@ -63,6 +66,14 @@ interface OutputTabsProps {
     tipoDoc: TipoDocumentoEvaluacion,
     config: GenerationPromptConfig,
   ) => Promise<void>;
+  onGenerateFreeDoc?: (config: GenerationPromptConfig) => Promise<void>;
+  onUpdateEsquema?: (next: EsquemaVisualData) => Promise<void>;
+  onUpdateAndamiaje?: (next: ExplicacionAndamiajeData) => Promise<void>;
+  onUpdateEvaluationDoc?: (
+    tipoDoc: TipoDocumentoEvaluacion,
+    next: ExamenPdfData,
+  ) => Promise<void>;
+  onGenerateImage?: (enunciado: string, isStudentBlank?: boolean) => Promise<string>;
   onGenerateMiniApp: (
     tipo: TipoJuego,
     config: GenerationPromptConfig,
@@ -136,6 +147,11 @@ export function OutputTabs({
   onGenerateEsquema,
   onGenerateAndamiaje,
   onGenerateEvaluationDoc,
+  onGenerateFreeDoc,
+  onUpdateEsquema,
+  onUpdateAndamiaje,
+  onUpdateEvaluationDoc,
+  onGenerateImage,
   onGenerateMiniApp,
   onRefineHtml5,
   onIterateArtifact,
@@ -578,6 +594,10 @@ export function OutputTabs({
           isGenerating={isGeneratingEsquema}
           errorMessage={esquemaError}
           onGenerate={onGenerateEsquema}
+          onUpdateData={onUpdateEsquema}
+          onGenerateImage={
+            onGenerateImage ? (ctx) => onGenerateImage(ctx, false) : undefined
+          }
         />
       )}
       {activeTab === 'andamiaje' && (
@@ -587,6 +607,7 @@ export function OutputTabs({
           isGenerating={isGeneratingAndamiaje}
           errorMessage={andamiajeError}
           onGenerate={onGenerateAndamiaje}
+          onUpdateData={onUpdateAndamiaje}
         />
       )}
       {activeTab === 'examen' && (
@@ -598,6 +619,9 @@ export function OutputTabs({
           generatingDocType={generatingDocType}
           generateDocError={generateDocError}
           onGenerateDoc={onGenerateEvaluationDoc}
+          onGenerateFreeDoc={onGenerateFreeDoc}
+          onUpdateDoc={onUpdateEvaluationDoc}
+          onGenerateImage={onGenerateImage}
         />
       )}
       {activeTab === 'miniapps' && (

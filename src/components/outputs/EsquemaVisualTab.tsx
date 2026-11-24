@@ -2,11 +2,18 @@ import { useState } from 'react';
 import {
   AlertTriangle,
   BookOpen,
+  Check,
   GitBranch,
+  ImagePlus,
   Lightbulb,
+  Loader2,
+  Pencil,
+  Plus,
   Printer,
   SlidersHorizontal,
   Sparkles,
+  Trash2,
+  X,
 } from 'lucide-react';
 import type {
   EsquemaVisualData,
@@ -25,6 +32,8 @@ interface EsquemaVisualTabProps {
   isGenerating?: boolean;
   errorMessage?: string | null;
   onGenerate?: (config: GenerationPromptConfig) => Promise<void>;
+  onUpdateData?: (next: EsquemaVisualData) => Promise<void>;
+  onGenerateImage?: (contextText: string) => Promise<string>;
 }
 
 const ESQUEMA_TIPOLOGIAS = [
@@ -48,13 +57,58 @@ export function EsquemaVisualTab({
   isGenerating = false,
   errorMessage = null,
   onGenerate,
+  onUpdateData,
+  onGenerateImage,
 }: EsquemaVisualTabProps) {
   const [showConfig, setShowConfig] = useState(!data);
+  const [isEditing, setIsEditing] = useState(false);
+  const [draft, setDraft] = useState<EsquemaVisualData | null>(null);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [isGeneratingImg, setIsGeneratingImg] = useState(false);
+  const [imgError, setImgError] = useState<string | null>(null);
 
   async function handleSubmit(config: GenerationPromptConfig) {
     if (!onGenerate) return;
     await onGenerate(config);
     setShowConfig(false);
+    setIsEditing(false);
+    setDraft(null);
+  }
+
+  function startEditing() {
+    if (!data) return;
+    setDraft(JSON.parse(JSON.stringify(data)) as EsquemaVisualData);
+    setIsEditing(true);
+  }
+
+  async function saveDraft() {
+    if (!draft || !onUpdateData) return;
+    setIsSavingEdit(true);
+    try {
+      await onUpdateData(draft);
+      setIsEditing(false);
+      setDraft(null);
+    } finally {
+      setIsSavingEdit(false);
+    }
+  }
+
+  async function handleIllustrate() {
+    if (!data || !onGenerateImage || !onUpdateData) return;
+    setImgError(null);
+    setIsGeneratingImg(true);
+    try {
+      const url = await onGenerateImage(
+        `${data.titulo_central}. ${data.subtitulo_competencial}`,
+      );
+      await onUpdateData({ ...data, imagen_ia_url: url });
+    } catch (error) {
+      setImgError(
+        error instanceof Error ? error.message : 'No se pudo generar la ilustración IA.',
+      );
+    } finally {
+      setIsGeneratingImg(false);
+    }
   }
 
   return (
@@ -88,6 +142,35 @@ export function EsquemaVisualTab({
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
+              {onUpdateData && data && (
+                <button
+                  type="button"
+                  onClick={() => (isEditing ? setIsEditing(false) : startEditing())}
+                  className={`inline-flex items-center gap-1.5 rounded-xl border px-3.5 py-2.5 text-xs font-bold ${
+                    isEditing
+                      ? 'border-amber-400 bg-amber-50 text-amber-900'
+                      : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
+                  }`}
+                >
+                  <Pencil className="h-4 w-4" />
+                  {isEditing ? 'Cancelar edición' : 'Editar in situ'}
+                </button>
+              )}
+              {onGenerateImage && onUpdateData && data && (
+                <button
+                  type="button"
+                  disabled={isGeneratingImg}
+                  onClick={() => void handleIllustrate()}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-indigo-200 bg-indigo-50 px-3.5 py-2.5 text-xs font-bold text-indigo-800 hover:bg-indigo-100 disabled:opacity-50"
+                >
+                  {isGeneratingImg ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <ImagePlus className="h-4 w-4" />
+                  )}
+                  Ilustrar con IA
+                </button>
+              )}
               {onGenerate && (
                 <button
                   type="button"
@@ -108,6 +191,181 @@ export function EsquemaVisualTab({
               </button>
             </div>
           </div>
+
+          {imgError && (
+            <p className="no-print rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs font-semibold text-rose-800">
+              {imgError}
+            </p>
+          )}
+
+          {isEditing && draft ? (
+            <div className="no-print space-y-4 rounded-2xl border-2 border-amber-300 bg-amber-50/40 p-5">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h4 className="text-sm font-extrabold text-slate-900">
+                  Editando Esquema Visual in situ
+                </h4>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsEditing(false);
+                      setDraft(null);
+                    }}
+                    className="inline-flex items-center gap-1 rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-700"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isSavingEdit}
+                    onClick={() => void saveDraft()}
+                    className="inline-flex items-center gap-1 rounded-xl bg-emerald-600 px-4 py-1.5 text-xs font-bold text-white hover:bg-emerald-700 disabled:opacity-50"
+                  >
+                    <Check className="h-3.5 w-3.5" />
+                    {isSavingEdit ? 'Guardando...' : 'Guardar cambios'}
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700">Título central</label>
+                  <input
+                    type="text"
+                    value={draft.titulo_central}
+                    onChange={(ev) => setDraft({ ...draft, titulo_central: ev.target.value })}
+                    className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700">Subtítulo</label>
+                  <input
+                    type="text"
+                    value={draft.subtitulo_competencial}
+                    onChange={(ev) =>
+                      setDraft({ ...draft, subtitulo_competencial: ev.target.value })
+                    }
+                    className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700">
+                  Enfoque LOMLOE Canarias
+                </label>
+                <input
+                  type="text"
+                  value={draft.enfoque_canarias_lomloe}
+                  onChange={(ev) =>
+                    setDraft({ ...draft, enfoque_canarias_lomloe: ev.target.value })
+                  }
+                  className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm"
+                />
+              </div>
+
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-bold text-slate-700 uppercase">
+                    Ramas conceptuales ({draft.ramas.length})
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setDraft({
+                        ...draft,
+                        ramas: [
+                          ...draft.ramas,
+                          {
+                            titulo: 'Nueva rama',
+                            icono_visual: '📌',
+                            resumen_clave: '',
+                            subconceptos: ['Punto clave 1'],
+                            conexion_con_otros_temas: '',
+                            es_repaso_libreta: false,
+                          },
+                        ],
+                      })
+                    }
+                    className="inline-flex items-center gap-1 rounded-lg bg-indigo-600 px-2.5 py-1 text-xs font-bold text-white"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    Añadir rama
+                  </button>
+                </div>
+
+                {draft.ramas.map((rama, rIdx) => (
+                  <div
+                    key={rIdx}
+                    className="space-y-2 rounded-xl border border-slate-200 bg-white p-3.5"
+                  >
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={rama.icono_visual}
+                        onChange={(ev) => {
+                          const next = [...draft.ramas];
+                          next[rIdx] = { ...rama, icono_visual: ev.target.value };
+                          setDraft({ ...draft, ramas: next });
+                        }}
+                        className="w-12 rounded-lg border border-slate-300 px-2 py-1 text-center text-sm"
+                        aria-label="Icono"
+                      />
+                      <input
+                        type="text"
+                        value={rama.titulo}
+                        onChange={(ev) => {
+                          const next = [...draft.ramas];
+                          next[rIdx] = { ...rama, titulo: ev.target.value };
+                          setDraft({ ...draft, ramas: next });
+                        }}
+                        className="flex-1 rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm font-bold"
+                      />
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setDraft({
+                            ...draft,
+                            ramas: draft.ramas.filter((_, i) => i !== rIdx),
+                          })
+                        }
+                        aria-label="Eliminar rama"
+                        className="rounded-lg p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                    <input
+                      type="text"
+                      value={rama.resumen_clave}
+                      placeholder="Resumen clave..."
+                      onChange={(ev) => {
+                        const next = [...draft.ramas];
+                        next[rIdx] = { ...rama, resumen_clave: ev.target.value };
+                        setDraft({ ...draft, ramas: next });
+                      }}
+                      className="w-full rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs"
+                    />
+                    <textarea
+                      rows={3}
+                      value={rama.subconceptos.join('\n')}
+                      onChange={(ev) => {
+                        const next = [...draft.ramas];
+                        next[rIdx] = {
+                          ...rama,
+                          subconceptos: ev.target.value.split('\n'),
+                        };
+                        setDraft({ ...draft, ramas: next });
+                      }}
+                      placeholder="Un subconcepto por línea..."
+                      className="w-full rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs"
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
 
           <article className="print-sheet space-y-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
             <header className="print-avoid-break rounded-2xl border-2 border-indigo-200 bg-indigo-50/70 p-5 print-preserve-color">
@@ -132,6 +390,25 @@ export function EsquemaVisualTab({
 
             {data.recurso_visual && (
               <VisualFigureRenderer spec={data.recurso_visual} showSolution={true} />
+            )}
+
+            {data.imagen_ia_url && (
+              <figure className="print-avoid-break rounded-xl border border-slate-200 bg-white p-3 text-center">
+                <img
+                  src={data.imagen_ia_url}
+                  alt={`Ilustración de ${data.titulo_central}`}
+                  className="mx-auto max-h-72 rounded-lg object-contain"
+                />
+                {onUpdateData && (
+                  <button
+                    type="button"
+                    onClick={() => void onUpdateData({ ...data, imagen_ia_url: undefined })}
+                    className="no-print mt-2 text-[11px] font-semibold text-rose-600 hover:underline"
+                  >
+                    Quitar ilustración IA
+                  </button>
+                )}
+              </figure>
             )}
 
             <section>

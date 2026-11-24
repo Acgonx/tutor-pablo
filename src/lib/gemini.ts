@@ -1,7 +1,8 @@
-import { GoogleGenAI, Type } from '@google/genai';
-import type { Part, Schema } from '@google/genai';
+import { GoogleGenAI, ThinkingLevel, Type } from '@google/genai';
+import type { Part, Schema, ThinkingConfig } from '@google/genai';
 import { getAsignaturaByNombre } from '../data/curriculumCanarias';
-import { GEMINI_MODEL, isGeminiConfigured } from './envConfig';
+import { GEMINI_IMAGE_MODEL, GEMINI_MODEL, isGeminiConfigured } from './envConfig';
+import { compressGeneratedDataUrl } from '../utils/imageUtils';
 import type { LibretaErrorDoc, TipoJuego } from '../types/firestore';
 import type {
   FuenteDocumento,
@@ -12,6 +13,7 @@ import type {
 import type {
   CazaErrorPayload,
   ClasificarPayload,
+  DocumentoLibreData,
   EsquemaVisualData,
   EvaluacionYFichasBundle,
   ExamenPdfData,
@@ -21,6 +23,7 @@ import type {
   GeneratedStudyPack,
   GenerationPromptConfig,
   MiniAppsBundle,
+  ModoVelocidadIA,
   NeonHtmlPayload,
   NivelDificultad,
   TipoDocumentoEvaluacion,
@@ -48,8 +51,12 @@ SKILL PEDAGÓGICA: EJERCICIOS Y EVALUACIÓN 1º ESO CANARIAS (DECRETO 30/2023, D
 - Cuando el ejercicio involucre representar o colorear fracciones, usa "fraccion_barra" o "fraccion_circulo" con "denominador", "numerador" y "modo": "colorear" (en Versión Alumno aparecerá en blanco para que Pablo la pinte, y en el solucionario docente aparecerá coloreada) o "lectura" (ya sombreada para identificar la fracción).
 - Cuando involucre comparar u ordenar números/fracciones, usa "recta_numerica" ("min", "max", "paso", "marcas_destacadas").
 - Cuando involucre áreas, perímetros o geometría, usa "figura_geometrica" ("forma": triangulo|rectangulo|cuadrado|circulo|rombo|trapecio, "medidas").
-- Para coordenadas cartesianas, usa "ejes_coordenadas". Para tablas de proporcionalidad, datos o análisis morfológico, usa "tabla_datos".
-- Para otras materias (Biología, Tecnología, Geografía), cuando un dibujo ayude, usa "svg_libre" con SVG limpio y etiquetas claras dentro de viewBox="0 0 280 160".
+- Para coordenadas cartesianas, usa "ejes_coordenadas".
+- Para tablas para completar (datos, magnitudes, gramática, comparación): usa "tabla_datos". NUNCA escribas "[a completar por el alumno]", "[completar]" ni "___". Para cada celda que Pablo deba rellenar, escribe la solución real envuelta en llaves dobles {{...}} (ej. ["Corteza", "{{Capa externa sólida}}", "{{5-70 km}}"]): en Versión Alumno se imprimirá vacía para escribir, y en Versión Docente mostrará la respuesta.
+- Para diagramas de capas (capas de la Tierra/geosfera, atmósfera, célula, pirámide trófica o estratos): usa SIEMPRE "diagrama_capas" con "disposicion_capas": "concentrico" o "estratos", el array "capas" (ordenadas de fuera hacia dentro o de arriba abajo, con "nombre", "color" hex legible y "detalle") y "modo": "colorear" (mudas con números para que Pablo escriba el nombre) o "lectura".
+- Para etapas históricas o procesos secuenciales: usa "linea_tiempo" con "hitos" ([{ fecha, evento }]) y "modo": "colorear" (fechas visibles y recuadro mudo en Alumno) o "lectura".
+- Para esquemas de partes o relaciones de un concepto: usa "esquema_etiquetado" con "partes" ([{ etiqueta, descripcion }]).
+- Solo usa "svg_libre" si ninguna de las plantillas anteriores encaja, creando formas detalladas dentro de viewBox="0 0 340 200".
 
 4. ESTRUCTURA PEDAGÓGICA Y SOLUCIONARIO:
 - Lenguaje cercano, riguroso pero claro, motivador y sin sobrecarga cognitiva.
@@ -58,6 +65,23 @@ SKILL PEDAGÓGICA: EJERCICIOS Y EVALUACIÓN 1º ESO CANARIAS (DECRETO 30/2023, D
 - En todas las mini-apps da feedback inmediato explicando el porqué pedagógico.
 - Respeta siempre el aislamiento del artefacto actual: no mezcles temas ni errores de otros artefactos salvo los invocados expresamente por el docente.
 `.trim();
+
+function resolveModel(config?: Pick<GenerationPromptConfig, 'modeloOverride'>): string {
+  const custom = config?.modeloOverride?.trim();
+  return custom || GEMINI_MODEL;
+}
+
+function buildThinkingConfig(
+  modelName: string,
+  speed: ModoVelocidadIA = 'rapido',
+): ThinkingConfig {
+  if (modelName.includes('2.5')) {
+    return { thinkingBudget: speed === 'rapido' ? 0 : 2048 };
+  }
+  return {
+    thinkingLevel: speed === 'rapido' ? ThinkingLevel.LOW : ThinkingLevel.MEDIUM,
+  };
+}
 
 function getGenAIClient(): GoogleGenAI {
   const apiKey = import.meta.env.VITE_GEMINI_API_KEY?.trim();
@@ -159,6 +183,9 @@ const visualSpecSchema: Schema = {
         'figura_geometrica',
         'ejes_coordenadas',
         'tabla_datos',
+        'diagrama_capas',
+        'linea_tiempo',
+        'esquema_etiquetado',
         'svg_libre',
       ],
     },
@@ -214,9 +241,52 @@ const visualSpecSchema: Schema = {
     columnas: { type: Type.ARRAY, items: { type: Type.STRING } },
     filas_tabla: {
       type: Type.ARRAY,
+      description: 'Celdas a rellenar por Pablo envueltas en {{respuesta_correcta}}. Prohibido escribir [a completar].',
       items: { type: Type.ARRAY, items: { type: Type.STRING } },
     },
     filas_vacias_alumno: { type: Type.INTEGER },
+    disposicion_capas: {
+      type: Type.STRING,
+      format: 'enum',
+      enum: ['concentrico', 'estratos'],
+    },
+    capas: {
+      type: Type.ARRAY,
+      description: 'Capas para diagrama_capas (ej. Corteza, Manto, Núcleo externo, Núcleo interno).',
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          nombre: { type: Type.STRING },
+          color: { type: Type.STRING },
+          detalle: { type: Type.STRING },
+        },
+        required: ['nombre'],
+      },
+    },
+    hitos: {
+      type: Type.ARRAY,
+      description: 'Hitos cronológicos para linea_tiempo.',
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          fecha: { type: Type.STRING },
+          evento: { type: Type.STRING },
+        },
+        required: ['fecha', 'evento'],
+      },
+    },
+    partes: {
+      type: Type.ARRAY,
+      description: 'Partes o elementos conectados para esquema_etiquetado.',
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          etiqueta: { type: Type.STRING },
+          descripcion: { type: Type.STRING },
+        },
+        required: ['etiqueta'],
+      },
+    },
     viewBox: { type: Type.STRING },
     svg_contenido: { type: Type.STRING },
   },
@@ -825,6 +895,7 @@ Tareas del Paso 1:
       responseMimeType: 'application/json',
       responseSchema: ocrResponseSchema,
       temperature: 0.2,
+      thinkingConfig: buildThinkingConfig(GEMINI_MODEL, 'rapido'),
     },
   });
 
@@ -869,6 +940,7 @@ Tareas:
       responseMimeType: 'application/json',
       responseSchema: ocrResponseSchema,
       temperature: 0.25,
+      thinkingConfig: buildThinkingConfig(GEMINI_MODEL, 'rapido'),
     },
   });
 
@@ -890,14 +962,16 @@ ${cfg}
 
 ${context}`;
 
+  const modelName = resolveModel(params.config);
   const response = await ai.models.generateContent({
-    model: GEMINI_MODEL,
+    model: modelName,
     contents: [{ text: prompt }],
     config: {
       systemInstruction: `${CUSTOM_PEDAGOGICAL_SKILL}\n\nGenera exclusivamente el JSON del Esquema Visual.`,
       responseMimeType: 'application/json',
       responseSchema: esquemaVisualSchema,
       temperature: 0.4,
+      thinkingConfig: buildThinkingConfig(modelName, params.config.modoVelocidad ?? 'rapido'),
     },
   });
 
@@ -919,14 +993,16 @@ ${cfg}
 
 ${context}`;
 
+  const modelName = resolveModel(params.config);
   const response = await ai.models.generateContent({
-    model: GEMINI_MODEL,
+    model: modelName,
     contents: [{ text: prompt }],
     config: {
       systemInstruction: `${CUSTOM_PEDAGOGICAL_SKILL}\n\nGenera exclusivamente el JSON de Explicación con Andamiaje.`,
       responseMimeType: 'application/json',
       responseSchema: andamiajeSchema,
       temperature: 0.4,
+      thinkingConfig: buildThinkingConfig(modelName, params.config.modoVelocidad ?? 'rapido'),
     },
   });
 
@@ -958,14 +1034,16 @@ ${previousQuestionsNote}
 
 ${context}`;
 
+  const modelName = resolveModel(params.config);
   const response = await ai.models.generateContent({
-    model: GEMINI_MODEL,
+    model: modelName,
     contents: [{ text: prompt }],
     config: {
       systemInstruction: `${CUSTOM_PEDAGOGICAL_SKILL}\n\nEres especialista en evaluación LOMLOE Canarias (1º ESO). Devuelve JSON válido exacto.`,
       responseMimeType: 'application/json',
       responseSchema: fichaOExamenSchema,
       temperature: 0.5,
+      thinkingConfig: buildThinkingConfig(modelName, params.config.modoVelocidad ?? 'rapido'),
     },
   });
 
@@ -1025,14 +1103,19 @@ REQUISITOS DE DISEÑO Y PROGRAMACIÓN DE "html_completo":
 
 ${context}`;
 
+    const modelName = resolveModel(params.config);
     const response = await ai.models.generateContent({
-      model: GEMINI_MODEL,
+      model: modelName,
       contents: [{ text: prompt }],
       config: {
         systemInstruction: `${CUSTOM_PEDAGOGICAL_SKILL}\n\nEres un experto diseñador e ingeniero creativo de aplicaciones web educativas HTML5/CSS3/SVG altamente interactivas y visuales para estudiantes de 1º de ESO (12 años) en iPad.`,
         responseMimeType: 'application/json',
         responseSchema: neonHtmlSchema,
         temperature: 0.6,
+        thinkingConfig: buildThinkingConfig(
+          modelName,
+          params.config.modoVelocidad ?? 'rapido',
+        ),
       },
     });
 
@@ -1056,14 +1139,16 @@ ${cfg}
 
 ${context}`;
 
+  const modelName = resolveModel(params.config);
   const response = await ai.models.generateContent({
-    model: GEMINI_MODEL,
+    model: modelName,
     contents: [{ text: prompt }],
     config: {
       systemInstruction: `${CUSTOM_PEDAGOGICAL_SKILL}\n\nEres diseñador de microjuegos educativos táctiles para iPad en 1º ESO.`,
       responseMimeType: 'application/json',
       responseSchema: schemaByType[effectiveTipo],
       temperature: 0.6,
+      thinkingConfig: buildThinkingConfig(modelName, params.config.modoVelocidad ?? 'rapido'),
     },
   });
 
@@ -1111,11 +1196,111 @@ ${context}`;
       responseMimeType: 'application/json',
       responseSchema: neonHtmlSchema,
       temperature: 0.4,
+      thinkingConfig: buildThinkingConfig(GEMINI_MODEL, 'rapido'),
     },
   });
 
   const parsed = parseJsonResponse<NeonHtmlPayload>(response.text);
   return sanitizeGamePayload(parsed) as NeonHtmlPayload;
+}
+
+const documentoLibreSchema: Schema = {
+  type: Type.OBJECT,
+  properties: {
+    titulo: { type: Type.STRING },
+    html_alumno: {
+      type: Type.STRING,
+      description: 'Cuerpo HTML5 limpio e imprimible para el alumno (sin soluciones, con dibujos SVG nítidos y huecos en blanco).',
+    },
+    html_docente: {
+      type: Type.STRING,
+      description: 'Cuerpo HTML5 con el solucionario completo paso a paso y dibujos etiquetados.',
+    },
+  },
+  required: ['titulo', 'html_alumno', 'html_docente'],
+};
+
+/**
+ * Modo Documento Libre Gemini: genera directamente una ficha/examen HTML5 completa
+ * con SVG artísticos y tablas limpias sin las restricciones del esquema de preguntas.
+ */
+export async function generateFreeHtmlDocument(params: {
+  verification: OcrVerificationData;
+  libretaErrores: LibretaErrorDoc[];
+  config: GenerationPromptConfig;
+}): Promise<DocumentoLibreData> {
+  const ai = getGenAIClient();
+  const context = buildPedagogicalContext(params.verification, params.libretaErrores);
+  const cfg = buildConfigBlock(params.config);
+  const modelName = resolveModel(params.config);
+
+  const prompt = `Genera directamente una ficha o examen completo y maquetado en HTML limpio (listo para imprimir en A4) con exactamente ${params.config.cantidad} actividades para Pablo (1º ESO Canarias).
+
+${cfg}
+
+REGLAS DE MAQUETACIÓN:
+- Entrega "html_alumno" (espacios en blanco reales, tablas con celdas vacías para escribir, diagramas SVG mudos sin etiquetas resueltas) y "html_docente" (con respuestas y explicaciones).
+- PROHIBIDO escribir "[a completar por el alumno]" dentro de cuadros o tablas; deja celdas limpias vacías con altura mínima (\`height: 28px\`).
+- Usa SVGs vectoriales detallados y limpios (viewBox adecuado, colores suaves imprimibles, líneas nítidas) cuando haya dibujos o esquemas.
+- Para fórmulas matemáticas, usa HTML claro (\`<span class="frac">\`, \`<sup>\`, \`×\`, \`÷\`, \`√\`, \`π\`) sin dejar delimitadores LaTeX crudos sin formatear.
+
+${context}`;
+
+  const response = await ai.models.generateContent({
+    model: modelName,
+    contents: [{ text: prompt }],
+    config: {
+      systemInstruction: `${CUSTOM_PEDAGOGICAL_SKILL}\n\nEres maquetador editorial educativo experto en HTML5 imprimible para 1º ESO.`,
+      responseMimeType: 'application/json',
+      responseSchema: documentoLibreSchema,
+      temperature: 0.5,
+      thinkingConfig: buildThinkingConfig(modelName, params.config.modoVelocidad ?? 'rapido'),
+    },
+  });
+
+  return parseJsonResponse<DocumentoLibreData>(response.text);
+}
+
+/**
+ * Genera una ilustración didáctica real (PNG comprimido a JPEG liviano) usando el modelo de imagen de Gemini.
+ */
+export async function generateEducationalImage(params: {
+  asignatura: string;
+  tema: string;
+  enunciado: string;
+  isStudentBlank?: boolean;
+}): Promise<string> {
+  const ai = getGenAIClient();
+  const labelInstruction = params.isStudentBlank
+    ? 'Crea un diagrama escolar limpio sobre fondo blanco estilo libro de texto de 1º de ESO, con flechas señaladoras numeradas (1, 2, 3...) SIN los nombres escritos para que el estudiante los escriba.'
+    : 'Crea una ilustración educativa clara sobre fondo blanco estilo libro de texto moderno de 1º de ESO (12 años), colores nítidos y fácil de imprimir.';
+
+  const prompt = `Ilustración educativa para ${params.asignatura} (1º ESO) sobre "${params.tema}".
+Contexto de la actividad: ${params.enunciado}
+${labelInstruction}
+Estilo: diagrama vectorial limpio, fondo blanco puro, alta legibilidad al imprimir en papel.`;
+
+  const response = await ai.models.generateContent({
+    model: GEMINI_IMAGE_MODEL,
+    contents: [{ text: prompt }],
+    config: {
+      responseModalities: ['TEXT', 'IMAGE'],
+    },
+  });
+
+  const parts = response.candidates?.[0]?.content?.parts ?? [];
+  for (const part of parts) {
+    if (part.inlineData?.data) {
+      return compressGeneratedDataUrl(
+        part.inlineData.data,
+        part.inlineData.mimeType || 'image/png',
+      );
+    }
+  }
+
+  throw new Error(
+    `El modelo ${GEMINI_IMAGE_MODEL} no devolvió ninguna imagen. Revisa si tu clave de Gemini tiene acceso a generación de imágenes.`,
+  );
 }
 
 /**

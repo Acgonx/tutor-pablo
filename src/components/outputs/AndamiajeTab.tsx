@@ -1,15 +1,18 @@
 import { useState } from 'react';
 import {
+  Check,
   ChevronDown,
   ChevronUp,
   Eye,
   EyeOff,
   HelpCircle,
   Layers,
+  Pencil,
   Printer,
   SlidersHorizontal,
   Sparkles,
   Target,
+  X,
 } from 'lucide-react';
 import type {
   ExplicacionAndamiajeData,
@@ -26,6 +29,7 @@ interface AndamiajeTabProps {
   isGenerating?: boolean;
   errorMessage?: string | null;
   onGenerate?: (config: GenerationPromptConfig) => Promise<void>;
+  onUpdateData?: (next: ExplicacionAndamiajeData) => Promise<void>;
 }
 
 const ANDAMIAJE_TIPOLOGIAS = [
@@ -47,19 +51,43 @@ export function AndamiajeTab({
   isGenerating = false,
   errorMessage = null,
   onGenerate,
+  onUpdateData,
 }: AndamiajeTabProps) {
   const [showConfig, setShowConfig] = useState(!data);
   const [openSolutions, setOpenSolutions] = useState<Record<number, boolean>>({});
   const [openHints, setOpenHints] = useState<Record<number, boolean>>({});
   const [openFinalSolution, setOpenFinalSolution] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [draft, setDraft] = useState<ExplicacionAndamiajeData | null>(null);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
 
   async function handleSubmit(config: GenerationPromptConfig) {
     if (!onGenerate) return;
     await onGenerate(config);
     setShowConfig(false);
+    setIsEditing(false);
+    setDraft(null);
     setOpenSolutions({});
     setOpenHints({});
     setOpenFinalSolution(false);
+  }
+
+  function startEditing() {
+    if (!data) return;
+    setDraft(JSON.parse(JSON.stringify(data)) as ExplicacionAndamiajeData);
+    setIsEditing(true);
+  }
+
+  async function saveDraft() {
+    if (!draft || !onUpdateData) return;
+    setIsSavingEdit(true);
+    try {
+      await onUpdateData(draft);
+      setIsEditing(false);
+      setDraft(null);
+    } finally {
+      setIsSavingEdit(false);
+    }
   }
 
   function toggleSolution(num: number) {
@@ -111,6 +139,20 @@ export function AndamiajeTab({
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
+              {onUpdateData && data && (
+                <button
+                  type="button"
+                  onClick={() => (isEditing ? setIsEditing(false) : startEditing())}
+                  className={`inline-flex items-center gap-1.5 rounded-xl border px-3.5 py-2.5 text-xs font-bold ${
+                    isEditing
+                      ? 'border-amber-400 bg-amber-50 text-amber-900'
+                      : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
+                  }`}
+                >
+                  <Pencil className="h-4 w-4" />
+                  {isEditing ? 'Cancelar edición' : 'Editar in situ'}
+                </button>
+              )}
               {onGenerate && (
                 <button
                   type="button"
@@ -131,6 +173,101 @@ export function AndamiajeTab({
               </button>
             </div>
           </div>
+
+          {isEditing && draft && (
+            <div className="no-print space-y-4 rounded-2xl border-2 border-amber-300 bg-amber-50/40 p-5">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h4 className="text-sm font-extrabold text-slate-900">
+                  Editando Explicación con Andamiaje in situ
+                </h4>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsEditing(false);
+                      setDraft(null);
+                    }}
+                    className="inline-flex items-center gap-1 rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-700"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isSavingEdit}
+                    onClick={() => void saveDraft()}
+                    className="inline-flex items-center gap-1 rounded-xl bg-emerald-600 px-4 py-1.5 text-xs font-bold text-white hover:bg-emerald-700 disabled:opacity-50"
+                  >
+                    <Check className="h-3.5 w-3.5" />
+                    {isSavingEdit ? 'Guardando...' : 'Guardar cambios'}
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700">Introducción</label>
+                <textarea
+                  rows={2}
+                  value={draft.introduccion}
+                  onChange={(ev) => setDraft({ ...draft, introduccion: ev.target.value })}
+                  className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs"
+                />
+              </div>
+
+              {draft.bloques.map((b, bIdx) => (
+                <div
+                  key={bIdx}
+                  className="space-y-2 rounded-xl border border-slate-200 bg-white p-3.5 text-xs"
+                >
+                  <input
+                    type="text"
+                    value={b.titulo}
+                    onChange={(ev) => {
+                      const next = [...draft.bloques];
+                      next[bIdx] = { ...b, titulo: ev.target.value };
+                      setDraft({ ...draft, bloques: next });
+                    }}
+                    className="w-full rounded-lg border border-slate-300 px-2.5 py-1.5 font-bold"
+                  />
+                  <textarea
+                    rows={2}
+                    value={b.explicacion_breve}
+                    onChange={(ev) => {
+                      const next = [...draft.bloques];
+                      next[bIdx] = { ...b, explicacion_breve: ev.target.value };
+                      setDraft({ ...draft, bloques: next });
+                    }}
+                    className="w-full rounded-lg border border-slate-300 px-2.5 py-1.5"
+                    placeholder="Explicación breve..."
+                  />
+                  <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                    <input
+                      type="text"
+                      value={b.pregunta_verificacion}
+                      onChange={(ev) => {
+                        const next = [...draft.bloques];
+                        next[bIdx] = { ...b, pregunta_verificacion: ev.target.value };
+                        setDraft({ ...draft, bloques: next });
+                      }}
+                      placeholder="Pregunta..."
+                      className="rounded-lg border border-slate-300 px-2.5 py-1.5"
+                    />
+                    <input
+                      type="text"
+                      value={b.solucion_oculta}
+                      onChange={(ev) => {
+                        const next = [...draft.bloques];
+                        next[bIdx] = { ...b, solucion_oculta: ev.target.value };
+                        setDraft({ ...draft, bloques: next });
+                      }}
+                      placeholder="Solución oculta..."
+                      className="rounded-lg border border-slate-300 px-2.5 py-1.5"
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
 
           <div className="print-sheet space-y-5">
             <div className="print-avoid-break flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">

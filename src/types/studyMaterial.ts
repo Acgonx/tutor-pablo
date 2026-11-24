@@ -25,6 +25,24 @@ export interface PuntoCoordenadas {
   etiqueta?: string;
 }
 
+export interface CapaDiagrama {
+  nombre: string;
+  color?: string;
+  detalle?: string;
+}
+
+export interface HitoLineaTiempo {
+  fecha: string;
+  evento: string;
+}
+
+export interface ParteEsquemaEtiquetado {
+  etiqueta: string;
+  descripcion?: string;
+}
+
+export type ModoVelocidadIA = 'rapido' | 'creativo';
+
 export interface VisualSpec {
   tipo:
     | 'fraccion_barra'
@@ -33,6 +51,9 @@ export interface VisualSpec {
     | 'figura_geometrica'
     | 'ejes_coordenadas'
     | 'tabla_datos'
+    | 'diagrama_capas'
+    | 'linea_tiempo'
+    | 'esquema_etiquetado'
     | 'svg_libre';
   titulo?: string;
   pie_figura?: string;
@@ -56,6 +77,13 @@ export interface VisualSpec {
   columnas?: string[];
   filas_tabla?: string[][];
   filas_vacias_alumno?: number;
+  // Para diagrama_capas (capas de la Tierra, atmósfera, célula, pirámide...)
+  disposicion_capas?: 'concentrico' | 'estratos';
+  capas?: CapaDiagrama[];
+  // Para linea_tiempo
+  hitos?: HitoLineaTiempo[];
+  // Para esquema_etiquetado
+  partes?: ParteEsquemaEtiquetado[];
   // Para svg_libre (diagramas de biología, geografía, tecnología...)
   viewBox?: string;
   svg_contenido?: string;
@@ -67,6 +95,8 @@ export interface GenerationPromptConfig {
   incluirDibujos: boolean;
   dificultad: NivelDificultad;
   promptLibre: string;
+  modoVelocidad?: ModoVelocidadIA;
+  modeloOverride?: string;
 }
 
 export interface EsquemaRama {
@@ -98,6 +128,7 @@ export interface EsquemaVisualData {
   reglas_mnemotecnicas: ReglaMnemotecnica[];
   alertas_errores: ErrorFrecuenteComparativa[];
   recurso_visual?: VisualSpec;
+  imagen_ia_url?: string;
 }
 
 export interface BloqueAndamiaje {
@@ -110,6 +141,7 @@ export interface BloqueAndamiaje {
   solucion_oculta: string;
   refuerza_error_libreta: boolean;
   recurso_visual?: VisualSpec;
+  imagen_ia_url?: string;
 }
 
 export interface ExplicacionAndamiajeData {
@@ -135,6 +167,7 @@ export interface PreguntaExamen {
   solucion_docente: string;
   nota_correccion: string;
   recurso_visual?: VisualSpec;
+  imagen_ia_url?: string;
 }
 
 export interface ExamenPdfData {
@@ -155,11 +188,18 @@ export type TipoDocumentoEvaluacion =
   | 'ficha_ampliacion'
   | 'simulacion_examen';
 
+export interface DocumentoLibreData {
+  titulo: string;
+  html_alumno: string;
+  html_docente: string;
+}
+
 export interface EvaluacionYFichasBundle {
   ficha_refuerzo?: ExamenPdfData;
   ficha_estandar?: ExamenPdfData;
   ficha_ampliacion?: ExamenPdfData;
   simulacion_examen?: ExamenPdfData;
+  documento_libre?: DocumentoLibreData;
 }
 
 export interface FlashcardItem {

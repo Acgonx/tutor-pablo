@@ -1,9 +1,40 @@
-import type { FormaGeometrica, VisualSpec } from '../../types/studyMaterial';
+import type {
+  CapaDiagrama,
+  FormaGeometrica,
+  HitoLineaTiempo,
+  ParteEsquemaEtiquetado,
+  VisualSpec,
+} from '../../types/studyMaterial';
 
 interface VisualFigureRendererProps {
   spec: VisualSpec;
   showSolution?: boolean;
   className?: string;
+}
+
+const DEFAULT_LAYER_PALETTE = [
+  '#93c5fd',
+  '#fdba74',
+  '#fca5a5',
+  '#fde047',
+  '#86efac',
+  '#c4b5fd',
+] as const;
+
+function parseTableCell(raw: string): { isBlank: boolean; answer: string } {
+  const trimmed = (raw ?? '').trim();
+  const braceMatch = trimmed.match(/^\{\{([\s\S]+)\}\}$/);
+  if (braceMatch) {
+    return { isBlank: true, answer: braceMatch[1].trim() };
+  }
+  if (
+    /^\[.*(completar|alumno|espacio|rellenar|respuesta|escribir).*\]$/i.test(trimmed) ||
+    /^_{3,}$/.test(trimmed) ||
+    /^\?{2,}$/.test(trimmed)
+  ) {
+    return { isBlank: true, answer: '' };
+  }
+  return { isBlank: false, answer: raw };
 }
 
 function sanitizeSvgContent(raw: string): string {
@@ -310,6 +341,319 @@ function EjesCoordenadasSvg({
   );
 }
 
+function DiagramaCapasSvg({
+  capas = [],
+  disposicion = 'concentrico',
+  showLabels,
+}: {
+  capas?: CapaDiagrama[];
+  disposicion?: 'concentrico' | 'estratos';
+  showLabels: boolean;
+}) {
+  const safeCapas = capas.slice(0, 7);
+  if (safeCapas.length === 0) return null;
+
+  const width = 440;
+  const height = Math.max(190, safeCapas.length * 36 + 30);
+
+  if (disposicion === 'estratos') {
+    const leftW = 190;
+    const bandH = (height - 24) / safeCapas.length;
+    return (
+      <svg
+        viewBox={`0 0 ${width} ${height}`}
+        className="mx-auto w-full max-w-lg"
+        role="img"
+        aria-label="Diagrama de capas por estratos"
+      >
+        {safeCapas.map((capa, idx) => {
+          const y = 12 + idx * bandH;
+          const fill = capa.color || DEFAULT_LAYER_PALETTE[idx % DEFAULT_LAYER_PALETTE.length];
+          const midY = y + bandH / 2;
+          return (
+            <g key={idx}>
+              <rect
+                x={16}
+                y={y}
+                width={leftW}
+                height={bandH - 3}
+                rx={6}
+                fill={fill}
+                stroke="#1e293b"
+                strokeWidth={1.6}
+              />
+              <text
+                x={30}
+                y={midY + 4}
+                fontSize="11"
+                fontWeight="800"
+                fill="#0f172a"
+              >
+                {idx + 1}
+              </text>
+              <line
+                x1={16 + leftW}
+                y1={midY}
+                x2={236}
+                y2={midY}
+                stroke="#475569"
+                strokeWidth={1.5}
+                strokeDasharray="3 2"
+              />
+              <circle cx={16 + leftW} cy={midY} r={3} fill="#0f172a" />
+              <rect
+                x={236}
+                y={midY - 13}
+                width={190}
+                height={26}
+                rx={6}
+                fill={showLabels ? '#ecfdf5' : '#ffffff'}
+                stroke={showLabels ? '#10b981' : '#94a3b8'}
+                strokeWidth={1.4}
+              />
+              <text
+                x={246}
+                y={midY + 4}
+                fontSize="10.5"
+                fontWeight="700"
+                fill={showLabels ? '#065f46' : '#64748b'}
+              >
+                {showLabels
+                  ? `${idx + 1}. ${capa.nombre.slice(0, 26)}`
+                  : `${idx + 1}. ________________________`}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+    );
+  }
+
+  // Corte concéntrico (ideal para capas de la Tierra / Geosfera / Atmósfera / Célula)
+  const cx = 112;
+  const cy = Math.round(height / 2);
+  const maxR = Math.min(88, cy - 14);
+  const minR = 18;
+  const stepR = safeCapas.length > 1 ? (maxR - minR) / (safeCapas.length - 1) : 0;
+  const rowStep = (height - 28) / safeCapas.length;
+
+  return (
+    <svg
+      viewBox={`0 0 ${width} ${height}`}
+      className="mx-auto w-full max-w-lg"
+      role="img"
+      aria-label="Diagrama de capas concéntricas"
+    >
+      {safeCapas.map((capa, idx) => {
+        const radius = maxR - idx * stepR;
+        const fill = capa.color || DEFAULT_LAYER_PALETTE[idx % DEFAULT_LAYER_PALETTE.length];
+        const anchorX = cx + radius * 0.65;
+        const anchorY = cy - radius * 0.15 + (idx - safeCapas.length / 2) * 8;
+        const labelY = 14 + idx * rowStep + rowStep / 2;
+
+        return (
+          <g key={idx}>
+            <circle
+              cx={cx}
+              cy={cy}
+              r={radius}
+              fill={fill}
+              stroke="#1e293b"
+              strokeWidth={1.8}
+            />
+            <line
+              x1={anchorX}
+              y1={anchorY}
+              x2={236}
+              y2={labelY}
+              stroke="#334155"
+              strokeWidth={1.4}
+            />
+            <circle cx={anchorX} cy={anchorY} r={3.2} fill="#0f172a" />
+            <rect
+              x={236}
+              y={labelY - 13}
+              width={192}
+              height={26}
+              rx={6}
+              fill={showLabels ? '#ecfdf5' : '#ffffff'}
+              stroke={showLabels ? '#10b981' : '#94a3b8'}
+              strokeWidth={1.4}
+            />
+            <text
+              x={244}
+              y={labelY + 4}
+              fontSize="10.5"
+              fontWeight="700"
+              fill={showLabels ? '#065f46' : '#64748b'}
+            >
+              {showLabels
+                ? `${idx + 1}. ${capa.nombre.slice(0, 26)}`
+                : `${idx + 1}. ________________________`}
+            </text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+function LineaTiempoSvg({
+  hitos = [],
+  showLabels,
+}: {
+  hitos?: HitoLineaTiempo[];
+  showLabels: boolean;
+}) {
+  const safeHitos = hitos.slice(0, 6);
+  if (safeHitos.length === 0) return null;
+
+  const width = 480;
+  const height = 156;
+  const padX = 48;
+  const span = width - padX * 2;
+  const stepX = safeHitos.length > 1 ? span / (safeHitos.length - 1) : 0;
+
+  return (
+    <svg
+      viewBox={`0 0 ${width} ${height}`}
+      className="mx-auto w-full max-w-xl"
+      role="img"
+      aria-label="Línea del tiempo"
+    >
+      <line x1={20} y1={78} x2={width - 20} y2={78} stroke="#1e293b" strokeWidth={2.5} />
+      <polygon points={`${width - 12},78 ${width - 24},72 ${width - 24},84`} fill="#1e293b" />
+
+      {safeHitos.map((hito, idx) => {
+        const x = safeHitos.length === 1 ? width / 2 : padX + idx * stepX;
+        const isTop = idx % 2 === 0;
+        const boxY = isTop ? 12 : 106;
+        const dateY = isTop ? 94 : 68;
+        return (
+          <g key={idx}>
+            <line x1={x} y1={78} x2={x} y2={isTop ? 50 : 106} stroke="#6366f1" strokeWidth={1.8} />
+            <circle cx={x} cy={78} r={5} fill="#4f46e5" stroke="#ffffff" strokeWidth={1.5} />
+            <text x={x} y={dateY} textAnchor="middle" fontSize="9.5" fontWeight="800" fill="#312e81">
+              {hito.fecha.slice(0, 14)}
+            </text>
+            <rect
+              x={x - 52}
+              y={boxY}
+              width={104}
+              height={36}
+              rx={6}
+              fill={showLabels ? '#eef2ff' : '#ffffff'}
+              stroke={showLabels ? '#6366f1' : '#94a3b8'}
+              strokeWidth={1.3}
+            />
+            <text
+              x={x}
+              y={boxY + 21}
+              textAnchor="middle"
+              fontSize="9.5"
+              fontWeight="700"
+              fill={showLabels ? '#1e1b4b' : '#64748b'}
+            >
+              {showLabels ? hito.evento.slice(0, 18) : '____________'}
+            </text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+function EsquemaEtiquetadoSvg({
+  titulo,
+  partes = [],
+  showLabels,
+}: {
+  titulo?: string;
+  partes?: ParteEsquemaEtiquetado[];
+  showLabels: boolean;
+}) {
+  const safePartes = partes.slice(0, 6);
+  if (safePartes.length === 0) return null;
+
+  const width = 440;
+  const height = Math.max(150, Math.ceil(safePartes.length / 2) * 52 + 34);
+  const centerX = width / 2;
+  const centerY = height / 2;
+
+  return (
+    <svg
+      viewBox={`0 0 ${width} ${height}`}
+      className="mx-auto w-full max-w-lg"
+      role="img"
+      aria-label="Esquema visual etiquetado"
+    >
+      {safePartes.map((parte, idx) => {
+        const isLeft = idx % 2 === 0;
+        const row = Math.floor(idx / 2);
+        const totalRows = Math.ceil(safePartes.length / 2);
+        const y = 26 + ((row + 0.5) * (height - 40)) / totalRows;
+        const boxX = isLeft ? 12 : width - 156;
+        const lineStartX = isLeft ? 156 : width - 156;
+
+        return (
+          <g key={idx}>
+            <line
+              x1={centerX}
+              y1={centerY}
+              x2={lineStartX}
+              y2={y}
+              stroke="#6366f1"
+              strokeWidth={1.6}
+            />
+            <rect
+              x={boxX}
+              y={y - 16}
+              width={144}
+              height={32}
+              rx={7}
+              fill={showLabels ? '#f8fafc' : '#ffffff'}
+              stroke="#475569"
+              strokeWidth={1.4}
+            />
+            <text
+              x={boxX + 8}
+              y={y + 4}
+              fontSize="10"
+              fontWeight="700"
+              fill={showLabels ? '#0f172a' : '#64748b'}
+            >
+              {showLabels
+                ? `${idx + 1}. ${parte.etiqueta.slice(0, 20)}`
+                : `${idx + 1}. _______________`}
+            </text>
+          </g>
+        );
+      })}
+
+      <rect
+        x={centerX - 58}
+        y={centerY - 22}
+        width={116}
+        height={44}
+        rx={10}
+        fill="#4f46e5"
+        stroke="#312e81"
+        strokeWidth={1.8}
+      />
+      <text
+        x={centerX}
+        y={centerY + 4}
+        textAnchor="middle"
+        fontSize="10.5"
+        fontWeight="800"
+        fill="#ffffff"
+      >
+        {(titulo || 'Concepto').slice(0, 18)}
+      </text>
+    </svg>
+  );
+}
+
 /**
  * Renderiza figuras geométricas, fracciones para colorear, rectas numéricas,
  * tablas de datos y diagramas SVG seguros listos para pantalla e impresión A4.
@@ -389,14 +733,32 @@ export function VisualFigureRenderer({
             <tbody>
               {(spec.filas_tabla ?? []).map((row, rIdx) => (
                 <tr key={rIdx}>
-                  {spec.columnas?.map((_, cIdx) => (
-                    <td
-                      key={cIdx}
-                      className="border border-slate-300 px-2.5 py-2 text-slate-800"
-                    >
-                      {row[cIdx] ?? ''}
-                    </td>
-                  ))}
+                  {spec.columnas?.map((_, cIdx) => {
+                    const parsed = parseTableCell(row[cIdx] ?? '');
+                    if (parsed.isBlank) {
+                      return showSolution ? (
+                        <td
+                          key={cIdx}
+                          className="border border-slate-300 bg-emerald-50/70 px-2.5 py-2 font-semibold text-emerald-900"
+                        >
+                          {parsed.answer || 'Respuesta abierta'}
+                        </td>
+                      ) : (
+                        <td
+                          key={cIdx}
+                          className="h-9 min-w-[90px] border border-slate-300 bg-white px-2.5 py-2"
+                        />
+                      );
+                    }
+                    return (
+                      <td
+                        key={cIdx}
+                        className="border border-slate-300 px-2.5 py-2 text-slate-800"
+                      >
+                        {parsed.answer}
+                      </td>
+                    );
+                  })}
                 </tr>
               ))}
               {!showSolution &&
@@ -406,7 +768,7 @@ export function VisualFigureRenderer({
                       {spec.columnas?.map((__, cIdx) => (
                         <td
                           key={cIdx}
-                          className="h-7 border border-slate-300 px-2.5 py-2"
+                          className="h-9 border border-slate-300 px-2.5 py-2"
                         />
                       ))}
                     </tr>
@@ -415,6 +777,29 @@ export function VisualFigureRenderer({
             </tbody>
           </table>
         </div>
+      )}
+
+      {spec.tipo === 'diagrama_capas' && (
+        <DiagramaCapasSvg
+          capas={spec.capas}
+          disposicion={spec.disposicion_capas}
+          showLabels={showSolution || spec.modo === 'lectura'}
+        />
+      )}
+
+      {spec.tipo === 'linea_tiempo' && (
+        <LineaTiempoSvg
+          hitos={spec.hitos}
+          showLabels={showSolution || spec.modo === 'lectura'}
+        />
+      )}
+
+      {spec.tipo === 'esquema_etiquetado' && (
+        <EsquemaEtiquetadoSvg
+          titulo={spec.titulo}
+          partes={spec.partes}
+          showLabels={showSolution || spec.modo === 'lectura'}
+        />
       )}
 
       {spec.tipo === 'svg_libre' && spec.svg_contenido && (

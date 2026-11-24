@@ -3,7 +3,9 @@ import {
   analyzeImagesOcr,
   analyzeTextIndexOrTopic,
   generateAndamiaje,
+  generateEducationalImage,
   generateEsquemaVisual,
+  generateFreeHtmlDocument,
   generateSingleEvaluationDoc,
   generateSingleMiniApp,
   iterateStudyPack,
@@ -22,6 +24,7 @@ import type { LibretaErrorDoc, TipoJuego } from '../types/firestore';
 import type { FuenteDocumento, OcrVerificationData, UploadedImageItem } from '../types/ocr';
 import type {
   ArtefactoDoc,
+  DocumentoLibreData,
   EsquemaVisualData,
   ExamenPdfData,
   ExplicacionAndamiajeData,
@@ -324,6 +327,63 @@ export async function runGenerateEvaluationDoc(params: {
 
   return { doc, nextPack, nextArtefacto };
 }
+
+export async function runGenerateFreeDocument(params: {
+  studyPack: GeneratedStudyPack;
+  verification: OcrVerificationData;
+  artefacto: ArtefactoDoc | null;
+  availableLibretaErrors: LibretaErrorDoc[];
+  config: GenerationPromptConfig;
+}): Promise<{
+  docLibre: DocumentoLibreData;
+  nextPack: GeneratedStudyPack;
+  nextArtefacto: ArtefactoDoc | null;
+}> {
+  const invoked = resolveInvoked(params.verification, params.availableLibretaErrors);
+  const docLibre = await generateFreeHtmlDocument({
+    verification: params.verification,
+    libretaErrores: invoked,
+    config: params.config,
+  });
+
+  const nextPack: GeneratedStudyPack = {
+    ...params.studyPack,
+    evaluacion_y_fichas: {
+      ...params.studyPack.evaluacion_y_fichas,
+      documento_libre: docLibre,
+    },
+  };
+
+  let nextArtefacto = params.artefacto;
+  if (isFirebaseConfigured && params.artefacto) {
+    nextArtefacto = await updateArtefactoStudyPack({
+      artefacto: params.artefacto,
+      nextStudyPack: nextPack,
+    });
+  }
+
+  return { docLibre, nextPack, nextArtefacto };
+}
+
+export async function runSaveStudyPackEdit(params: {
+  nextPack: GeneratedStudyPack;
+  artefacto: ArtefactoDoc | null;
+  syncStudentSession?: boolean;
+}): Promise<ArtefactoDoc | null> {
+  if (!isFirebaseConfigured || !params.artefacto) {
+    return params.artefacto;
+  }
+  const nextArtefacto = await updateArtefactoStudyPack({
+    artefacto: params.artefacto,
+    nextStudyPack: params.nextPack,
+  });
+  if (params.syncStudentSession) {
+    await syncSesionIfAttached(nextArtefacto, params.nextPack);
+  }
+  return nextArtefacto;
+}
+
+export { generateEducationalImage };
 
 export async function runGenerateMiniApp(params: {
   tipoJuego: TipoJuego;
