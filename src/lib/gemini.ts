@@ -29,14 +29,30 @@ export const GEMINI_MODEL = import.meta.env.VITE_GEMINI_MODEL?.trim() || 'gemini
 export const isGeminiConfigured = Boolean(import.meta.env.VITE_GEMINI_API_KEY?.trim());
 
 /**
- * Espacio reservado para las instrucciones de la Skill / Gem personalizada del docente.
- * Se inyecta automáticamente en todas las llamadas pedagógicas de Gemini.
+ * Skill pedagógica integrada del docente ("Ejercicios 1º ESO Canarias"),
+ * adaptada al motor JSON estructurado y a las reglas de aislamiento y evaluación de la app.
  */
 export const CUSTOM_PEDAGOGICAL_SKILL = `
-INSTRUCCIONES BASE DE DISEÑO INSTRUCCIONAL (LOMLOE CANARIAS · 1º ESO):
-- Adapta siempre el vocabulario, los ejemplos y el rigor científico a 1º de ESO (12-13 años) en Canarias (Decreto 30/2023).
-- Diferencia claramente entre actividades de práctica graduada (fichas con andamiaje) y pruebas de evaluación tipo examen (comprobación objetiva de saberes, competencias específicas y criterios de evaluación).
-- Cuando el material subido esté incompleto frente a los saberes básicos oficiales del tema, complétalo de forma estructurada y rigurosa.
+SKILL PEDAGÓGICA: EJERCICIOS Y EVALUACIÓN 1º ESO CANARIAS (DECRETO 30/2023, DE 16 DE MARZO)
+
+1. MARCO NORMATIVO Y CONTEXTO CANARIO:
+- Alinea cada actividad, ficha, examen y mini-app con el Decreto 30/2023 (Canarias) para 1º de ESO (12-13 años).
+- Moviliza saberes básicos y criterios de evaluación reales de la materia, favoreciendo situaciones de aprendizaje contextualizadas con referentes del entorno sociocultural y natural de Canarias cuando sea pertinente (sin forzarlo artificialmente).
+- Cuando los apuntes o fotos subidas estén incompletos respecto a los saberes básicos oficiales del tema, complétalos de forma estructurada y rigurosa.
+
+2. ESTRUCTURA PEDAGÓGICA PARA 12 AÑOS (SIN SOBRECARGA COGNITIVA):
+- Lenguaje cercano, riguroso pero claro, motivador y sin ruido visual ni bloques de texto excesivos.
+- Progresión graduada en 3 niveles para las fichas de trabajo:
+  * Nivel 1 (Ficha Refuerzo · Activación y conceptos clave): definición, identificación, emparejamiento y consolidación sin sobrecarga.
+  * Nivel 2 (Ficha Estándar · Aplicación guiada): cálculos, análisis de oraciones, interpretación de datos/gráficos o procedimientos paso a paso.
+  * Nivel 3 (Ficha Ampliación · Transferencia y reto): resolución de problemas reales, deducción y razonamiento en varios pasos.
+- Diferenciación estricta frente a la Simulación de Examen: el examen oficial NO es práctica guiada ni incluye pistas; comprueba conocimientos, saberes y capacidades según criterios de evaluación reales.
+- Solucionario completo paso a paso: en cada pregunta de ficha o examen proporciona clave de respuesta exacta y explicación paso a paso en los ejercicios complejos (solucion_docente y nota_correccion).
+
+3. REGLAS PARA MINI-APPS LÚDICAS Y NOTACIÓN:
+- En todas las mini-apps (Flashcards, Clasificar, Trivia Reto y ¡Caza al Error!), ofrece feedback inmediato y explicativo tras cada respuesta (no solo si acierta o falla, sino el porqué pedagógico).
+- Usa notación matemática y científica limpia en texto/Unicode legible (ej. ×, ÷, ², ³, √, ≤, ≥, fracciones 3/4), evitando LaTeX crudo con delimitadores $ o $$ que no se renderizarían en tarjetas o botones interactivos.
+- Respeta siempre el aislamiento del artefacto actual: no mezcles temas ni errores de otros artefactos salvo los invocados expresamente por el docente.
 `.trim();
 
 function getGenAIClient(): GoogleGenAI {
