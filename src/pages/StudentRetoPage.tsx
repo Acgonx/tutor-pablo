@@ -78,6 +78,7 @@ export function StudentRetoPage() {
         titulo: reto.titulo,
         puntuacion: result.puntuacion,
         fallos: result.fallos,
+        interacciones: result.interacciones,
       });
       setSavingStatus('saved');
       setReto((prev) =>
@@ -87,6 +88,7 @@ export function StudentRetoPage() {
               completado: true,
               puntuacion: result.puntuacion,
               fallos_en_partida: result.fallos,
+              interacciones: result.interacciones,
             }
           : prev,
       );

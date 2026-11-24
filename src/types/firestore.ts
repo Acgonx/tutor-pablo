@@ -2,13 +2,26 @@ import type { GamePayload } from './studyMaterial';
 
 export type EstadoError = 'pendiente' | 'en_repaso' | 'superado';
 
-export type TipoJuego = 'flashcards' | 'clasificar' | 'trivia_reto' | 'ordenar_pasos';
+export type TipoJuego =
+  | 'flashcards'
+  | 'clasificar'
+  | 'trivia_reto'
+  | 'caza_error'
+  | 'ordenar_pasos';
 
 export interface FalloEnPartida {
   concepto: string;
   detalle: string;
   respuesta_alumno?: string;
   respuesta_correcta?: string;
+}
+
+export interface InteraccionPartida {
+  item: string;
+  respuesta_alumno: string;
+  respuesta_correcta?: string;
+  correcto: boolean;
+  explicacion?: string;
 }
 
 export interface LibretaErrorInput {
@@ -41,6 +54,7 @@ export interface RetoPabloDoc {
   completado: boolean;
   puntuacion: number | null;
   fallos_en_partida: FalloEnPartida[];
+  interacciones?: InteraccionPartida[];
   created_at: string;
 }
 

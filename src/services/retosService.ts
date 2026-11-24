@@ -9,7 +9,12 @@ import {
   updateDoc,
 } from 'firebase/firestore';
 import { COLLECTIONS, requireDb } from '../lib/firebase';
-import type { FalloEnPartida, RetoPabloHydrated, TipoJuego } from '../types/firestore';
+import type {
+  FalloEnPartida,
+  InteraccionPartida,
+  RetoPabloHydrated,
+  TipoJuego,
+} from '../types/firestore';
 import type { GamePayload } from '../types/studyMaterial';
 import { normalizeTimestampToIso } from '../utils/firestoreUtils';
 import { registerGameFailuresInLibreta } from './libretaErroresService';
@@ -57,6 +62,46 @@ function parseFallosArray(raw: unknown): FalloEnPartida[] {
     });
 }
 
+function sanitizeInteracciones(
+  interacciones: InteraccionPartida[],
+): InteraccionPartida[] {
+  return interacciones.map((item) => {
+    const clean: InteraccionPartida = {
+      item: item.item,
+      respuesta_alumno: item.respuesta_alumno,
+      correcto: Boolean(item.correcto),
+    };
+    if (item.respuesta_correcta?.trim()) {
+      clean.respuesta_correcta = item.respuesta_correcta.trim();
+    }
+    if (item.explicacion?.trim()) {
+      clean.explicacion = item.explicacion.trim();
+    }
+    return clean;
+  });
+}
+
+function parseInteraccionesArray(raw: unknown): InteraccionPartida[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((item): item is Record<string, unknown> => Boolean(item && typeof item === 'object'))
+    .map((item) => {
+      const result: InteraccionPartida = {
+        item: typeof item.item === 'string' ? item.item : '',
+        respuesta_alumno:
+          typeof item.respuesta_alumno === 'string' ? item.respuesta_alumno : '',
+        correcto: Boolean(item.correcto),
+      };
+      if (typeof item.respuesta_correcta === 'string' && item.respuesta_correcta.trim()) {
+        result.respuesta_correcta = item.respuesta_correcta;
+      }
+      if (typeof item.explicacion === 'string' && item.explicacion.trim()) {
+        result.explicacion = item.explicacion;
+      }
+      return result;
+    });
+}
+
 function mapDocToReto(id: string, data: Record<string, unknown>): RetoPabloHydrated {
   const payload = parsePayloadJson(data.payload_json);
   const rawTipo = data.tipo_juego;
@@ -64,6 +109,7 @@ function mapDocToReto(id: string, data: Record<string, unknown>): RetoPabloHydra
     rawTipo === 'flashcards' ||
     rawTipo === 'clasificar' ||
     rawTipo === 'trivia_reto' ||
+    rawTipo === 'caza_error' ||
     rawTipo === 'ordenar_pasos'
       ? rawTipo
       : payload.tipo_juego;
@@ -81,6 +127,7 @@ function mapDocToReto(id: string, data: Record<string, unknown>): RetoPabloHydra
     completado: Boolean(data.completado),
     puntuacion: typeof data.puntuacion === 'number' ? data.puntuacion : null,
     fallos_en_partida: parseFallosArray(data.fallos_en_partida),
+    interacciones: parseInteraccionesArray(data.interacciones),
     created_at: normalizeTimestampToIso(data.created_at),
   };
 }
@@ -152,14 +199,17 @@ export async function completeRetoPablo(params: {
   titulo: string;
   puntuacion: number;
   fallos: FalloEnPartida[];
+  interacciones?: InteraccionPartida[];
 }): Promise<{ savedErrorsCount: number }> {
   const db = requireDb();
   const cleanFallos = sanitizeFallos(params.fallos);
+  const cleanInteracciones = sanitizeInteracciones(params.interacciones ?? []);
 
   await updateDoc(doc(db, COLLECTIONS.RETOS_PABLO, params.id), {
     completado: true,
     puntuacion: Math.max(0, Math.min(100, Math.round(params.puntuacion))),
     fallos_en_partida: cleanFallos,
+    interacciones: cleanInteracciones,
   });
 
   const savedErrorsCount = await registerGameFailuresInLibreta({

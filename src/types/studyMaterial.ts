@@ -1,4 +1,4 @@
-import type { FalloEnPartida, TipoJuego } from './firestore';
+import type { FalloEnPartida, InteraccionPartida, TipoJuego } from './firestore';
 import type { OcrVerificationData } from './ocr';
 
 export interface EsquemaRama {
@@ -74,6 +74,21 @@ export interface ExamenPdfData {
   puntuacion_total: number;
   preguntas: PreguntaExamen[];
   rubrica_docente: string;
+  es_simulacion_examen?: boolean;
+  nivel_etiqueta?: string;
+}
+
+export type TipoDocumentoEvaluacion =
+  | 'ficha_refuerzo'
+  | 'ficha_estandar'
+  | 'ficha_ampliacion'
+  | 'simulacion_examen';
+
+export interface EvaluacionYFichasBundle {
+  ficha_refuerzo: ExamenPdfData;
+  ficha_estandar: ExamenPdfData;
+  ficha_ampliacion: ExamenPdfData;
+  simulacion_examen: ExamenPdfData;
 }
 
 export interface FlashcardItem {
@@ -132,6 +147,23 @@ export interface TriviaRetoPayload {
   preguntas: TriviaPregunta[];
 }
 
+export interface CazaErrorCaso {
+  id: string;
+  contexto: string;
+  afirmaciones: string[];
+  indice_error: number;
+  explicacion_correccion: string;
+  concepto_clave: string;
+  es_repaso_libreta: boolean;
+}
+
+export interface CazaErrorPayload {
+  tipo_juego: 'caza_error';
+  titulo: string;
+  instrucciones: string;
+  casos: CazaErrorCaso[];
+}
+
 export interface PasoOrdenar {
   id: string;
   texto: string;
@@ -157,13 +189,15 @@ export type GamePayload =
   | FlashcardsPayload
   | ClasificarPayload
   | TriviaRetoPayload
+  | CazaErrorPayload
   | OrdenarPasosPayload;
 
 export interface MiniAppsBundle {
   flashcards: FlashcardsPayload;
   clasificar: ClasificarPayload;
   trivia_reto: TriviaRetoPayload;
-  ordenar_pasos: OrdenarPasosPayload;
+  caza_error: CazaErrorPayload;
+  ordenar_pasos?: OrdenarPasosPayload;
 }
 
 export interface GeneratedStudyPack {
@@ -171,7 +205,7 @@ export interface GeneratedStudyPack {
   tema: string;
   esquema_visual: EsquemaVisualData;
   explicacion_andamiaje: ExplicacionAndamiajeData;
-  examen_pdf: ExamenPdfData;
+  evaluacion_y_fichas: EvaluacionYFichasBundle;
   mini_apps: MiniAppsBundle;
 }
 
@@ -180,9 +214,12 @@ export interface GameCompletionResult {
   aciertos: number;
   total: number;
   fallos: FalloEnPartida[];
+  interacciones: InteraccionPartida[];
 }
 
 export type NivelDificultad = 'refuerzo' | 'estandar' | 'ampliacion' | 'reto_alto';
+
+export type EstadoArtefacto = 'activo' | 'superado';
 
 export interface ArtefactoIteracion {
   version: number;
@@ -197,6 +234,7 @@ export interface ArtefactoDoc {
   tema: string;
   titulo: string;
   dificultad: NivelDificultad;
+  estado: EstadoArtefacto;
   version: number;
   verification: OcrVerificationData;
   study_pack: GeneratedStudyPack;

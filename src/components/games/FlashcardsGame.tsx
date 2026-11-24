@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Check, HelpCircle, RotateCw, Sparkles, X } from 'lucide-react';
-import type { FalloEnPartida } from '../../types/firestore';
+import type { FalloEnPartida, InteraccionPartida } from '../../types/firestore';
 import type { FlashcardsPayload, GameCompletionResult } from '../../types/studyMaterial';
 
 interface FlashcardsGameProps {
@@ -15,6 +15,7 @@ export function FlashcardsGame({ payload, onComplete }: FlashcardsGameProps) {
   const [showHint, setShowHint] = useState(false);
   const [aciertos, setAciertos] = useState(0);
   const [fallos, setFallos] = useState<FalloEnPartida[]>([]);
+  const [interacciones, setInteracciones] = useState<InteraccionPartida[]>([]);
 
   if (cards.length === 0) {
     return (
@@ -39,6 +40,16 @@ export function FlashcardsGame({ payload, onComplete }: FlashcardsGameProps) {
           },
         ];
 
+    const nextInteracciones: InteraccionPartida[] = [
+      ...interacciones,
+      {
+        item: card.frente,
+        respuesta_alumno: knewIt ? 'Marcada como sabida' : 'Marcada para repasar',
+        respuesta_correcta: card.reverso,
+        correcto: knewIt,
+      },
+    ];
+
     if (index + 1 >= cards.length) {
       const puntuacion = Math.round((nextAciertos / cards.length) * 100);
       onComplete({
@@ -46,12 +57,14 @@ export function FlashcardsGame({ payload, onComplete }: FlashcardsGameProps) {
         aciertos: nextAciertos,
         total: cards.length,
         fallos: nextFallos,
+        interacciones: nextInteracciones,
       });
       return;
     }
 
     setAciertos(nextAciertos);
     setFallos(nextFallos);
+    setInteracciones(nextInteracciones);
     setIndex((prev) => prev + 1);
     setFlipped(false);
     setShowHint(false);

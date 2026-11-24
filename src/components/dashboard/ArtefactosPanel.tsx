@@ -2,20 +2,27 @@ import { useState } from 'react';
 import {
   Archive,
   Check,
+  CheckCircle2,
   ChevronDown,
   ChevronUp,
   Copy,
+  CopyPlus,
   ExternalLink,
   FolderOpen,
   History,
   Loader2,
   RefreshCw,
+  RotateCcw,
   Search,
   Trash2,
 } from 'lucide-react';
 import { ASIGNATURAS_1ESO_CANARIAS } from '../../data/curriculumCanarias';
 import { isFirebaseConfigured } from '../../lib/firebase';
-import type { ArtefactoDoc, NivelDificultad } from '../../types/studyMaterial';
+import type {
+  ArtefactoDoc,
+  EstadoArtefacto,
+  NivelDificultad,
+} from '../../types/studyMaterial';
 
 interface ArtefactosPanelProps {
   items: ArtefactoDoc[];
@@ -23,6 +30,8 @@ interface ArtefactosPanelProps {
   errorMessage: string | null;
   onRefresh: () => void;
   onOpenArtefacto: (artefacto: ArtefactoDoc) => void;
+  onToggleEstado: (id: string, nextEstado: EstadoArtefacto) => Promise<void>;
+  onDuplicateArtefacto: (artefacto: ArtefactoDoc) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
 }
 
@@ -66,14 +75,17 @@ export function ArtefactosPanel({
   errorMessage,
   onRefresh,
   onOpenArtefacto,
+  onToggleEstado,
+  onDuplicateArtefacto,
   onDelete,
 }: ArtefactosPanelProps) {
   const [filterAsignatura, setFilterAsignatura] = useState('todas');
   const [filterDificultad, setFilterDificultad] = useState('todas');
+  const [filterEstado, setFilterEstado] = useState<'todos' | 'activo' | 'superado'>('todos');
   const [searchText, setSearchText] = useState('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
 
   const normalizedSearch = searchText.trim().toLowerCase();
 
@@ -82,12 +94,13 @@ export function ArtefactosPanel({
       filterAsignatura === 'todas' || item.asignatura === filterAsignatura;
     const matchDif =
       filterDificultad === 'todas' || item.dificultad === filterDificultad;
+    const matchEstado = filterEstado === 'todos' || item.estado === filterEstado;
     const matchText =
       !normalizedSearch ||
       item.tema.toLowerCase().includes(normalizedSearch) ||
       item.titulo.toLowerCase().includes(normalizedSearch) ||
       item.asignatura.toLowerCase().includes(normalizedSearch);
-    return matchAsig && matchDif && matchText;
+    return matchAsig && matchDif && matchEstado && matchText;
   });
 
   async function handleCopySessionUrl(artefacto: ArtefactoDoc) {
@@ -102,12 +115,12 @@ export function ArtefactosPanel({
     }
   }
 
-  async function handleDelete(id: string) {
-    setDeletingId(id);
+  async function runBusyAction(id: string, fn: () => Promise<void>) {
+    setBusyId(id);
     try {
-      await onDelete(id);
+      await fn();
     } finally {
-      setDeletingId(null);
+      setBusyId(null);
     }
   }
 
@@ -120,12 +133,11 @@ export function ArtefactosPanel({
             Colección Firestore · artefactos
           </div>
           <h2 className="mt-1 text-xl font-extrabold text-slate-900">
-            Biblioteca de Artefactos (Reclamar e Iterar)
+            Biblioteca de Artefactos (Aislados e Iterables)
           </h2>
           <p className="mt-1 text-sm text-slate-600">
-            Cada sesión generada (Esquema, Andamiaje, Examen y las 4 Mini-Apps) se guarda aquí
-            con su contexto original para que puedas reabrirla, pedir cambios o subir la
-            dificultad manteniendo la consistencia.
+            Cada artefacto es independiente y no se mezcla con otros. Invócalo aquí cuando lo
+            necesites, duplícalo para generar más variantes, márcalo como superado o bórralo.
           </p>
         </div>
 
@@ -140,14 +152,14 @@ export function ArtefactosPanel({
         </button>
       </div>
 
-      <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-3">
+      <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-4">
         <div className="relative">
           <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
             value={searchText}
             onChange={(ev) => setSearchText(ev.target.value)}
-            placeholder="Buscar por tema o título..."
+            placeholder="Buscar tema o título..."
             className="w-full rounded-xl border border-slate-300 py-2 pr-3 pl-9 text-sm text-slate-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 focus:outline-none"
           />
         </div>
@@ -178,6 +190,19 @@ export function ArtefactosPanel({
           <option value="ampliacion">Ampliación</option>
           <option value="reto_alto">Reto alto</option>
         </select>
+
+        <select
+          value={filterEstado}
+          onChange={(ev) =>
+            setFilterEstado(ev.target.value as 'todos' | 'activo' | 'superado')
+          }
+          aria-label="Filtrar artefactos por estado"
+          className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700"
+        >
+          <option value="todos">Activos y superados</option>
+          <option value="activo">Solo activos</option>
+          <option value="superado">Solo superados</option>
+        </select>
       </div>
 
       {errorMessage && (
@@ -194,13 +219,14 @@ export function ArtefactosPanel({
           </div>
         ) : filtered.length === 0 ? (
           <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center text-sm text-slate-500">
-            No hay artefactos guardados todavía con estos filtros. Genera un paquete en{' '}
-            <strong>Generador de Estudio</strong> y se guardará automáticamente aquí.
+            No hay artefactos guardados con estos filtros.
           </div>
         ) : (
           filtered.map((item) => {
             const difMeta = DIFICULTAD_META[item.dificultad];
             const isExpanded = expandedId === item.id;
+            const isBusy = busyId === item.id;
+            const isSuperado = item.estado === 'superado';
             const sesionPath = item.sesion_pablo_id
               ? `/sesion/${item.sesion_pablo_id}`
               : null;
@@ -208,7 +234,11 @@ export function ArtefactosPanel({
             return (
               <article
                 key={item.id}
-                className="rounded-xl border border-slate-200 bg-white p-4 shadow-2xs"
+                className={`rounded-xl border p-4 shadow-2xs ${
+                  isSuperado
+                    ? 'border-emerald-200 bg-emerald-50/30'
+                    : 'border-slate-200 bg-white'
+                }`}
               >
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="space-y-1">
@@ -224,6 +254,12 @@ export function ArtefactosPanel({
                       <span className="rounded-full bg-slate-900 px-2 py-0.5 font-mono text-[11px] font-bold text-white">
                         v{item.version}
                       </span>
+                      {isSuperado && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 font-bold text-emerald-800">
+                          <CheckCircle2 className="h-3.5 w-3.5" />
+                          Superado
+                        </span>
+                      )}
                       <span className="text-slate-400">
                         Actualizado: {formatDateTime(item.updated_at)}
                       </span>
@@ -231,18 +267,62 @@ export function ArtefactosPanel({
 
                     <h3 className="text-base font-bold text-slate-900">{item.titulo}</h3>
                     <p className="text-xs text-slate-500">
-                      Tema: {item.tema} · Incluye Esquema, Andamiaje, Examen PDF y 4 Mini-Apps
+                      Tema: {item.tema} · Esquema + Andamiaje + 3 Fichas + Examen + 4 Mini-Apps
                     </p>
                   </div>
 
                   <div className="flex flex-wrap items-center gap-2">
                     <button
                       type="button"
+                      disabled={isBusy}
                       onClick={() => onOpenArtefacto(item)}
                       className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-3.5 py-2 text-xs font-bold text-white shadow-xs hover:bg-indigo-700"
                     >
                       <FolderOpen className="h-3.5 w-3.5" />
-                      Abrir e iterar
+                      Invocar e iterar
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled={isBusy}
+                      onClick={() =>
+                        void runBusyAction(item.id, () => onDuplicateArtefacto(item))
+                      }
+                      title="Clonar artefacto para generar una copia independiente"
+                      className="inline-flex items-center gap-1 rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                    >
+                      <CopyPlus className="h-3.5 w-3.5" />
+                      Duplicar
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled={isBusy}
+                      onClick={() =>
+                        void runBusyAction(item.id, () =>
+                          onToggleEstado(
+                            item.id,
+                            isSuperado ? 'activo' : 'superado',
+                          ),
+                        )
+                      }
+                      className={`inline-flex items-center gap-1 rounded-xl border px-3 py-2 text-xs font-bold ${
+                        isSuperado
+                          ? 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
+                          : 'border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
+                      }`}
+                    >
+                      {isSuperado ? (
+                        <>
+                          <RotateCcw className="h-3.5 w-3.5" />
+                          Reactivar
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle2 className="h-3.5 w-3.5" />
+                          Marcar superado
+                        </>
+                      )}
                     </button>
 
                     {sesionPath && (
@@ -255,12 +335,12 @@ export function ArtefactosPanel({
                           {copiedId === item.id ? (
                             <>
                               <Check className="h-3.5 w-3.5" />
-                              Enlace copiado
+                              Copiado
                             </>
                           ) : (
                             <>
                               <Copy className="h-3.5 w-3.5" />
-                              Copiar /sesion
+                              /sesion
                             </>
                           )}
                         </button>
@@ -268,9 +348,8 @@ export function ArtefactosPanel({
                           href={sesionPath}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                          className="inline-flex items-center gap-1 rounded-xl border border-slate-300 bg-white px-2.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
                         >
-                          Abrir
                           <ExternalLink className="h-3.5 w-3.5" />
                         </a>
                       </>
@@ -278,8 +357,10 @@ export function ArtefactosPanel({
 
                     <button
                       type="button"
-                      disabled={deletingId === item.id}
-                      onClick={() => void handleDelete(item.id)}
+                      disabled={isBusy}
+                      onClick={() =>
+                        void runBusyAction(item.id, () => onDelete(item.id))
+                      }
                       aria-label="Eliminar artefacto"
                       className="rounded-lg p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600"
                     >

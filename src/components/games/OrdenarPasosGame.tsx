@@ -7,7 +7,7 @@ import {
   Sparkles,
   XCircle,
 } from 'lucide-react';
-import type { FalloEnPartida } from '../../types/firestore';
+import type { FalloEnPartida, InteraccionPartida } from '../../types/firestore';
 import type {
   GameCompletionResult,
   OrdenarPasosPayload,
@@ -46,6 +46,7 @@ export function OrdenarPasosGame({ payload, onComplete }: OrdenarPasosGameProps)
   const [checked, setChecked] = useState(false);
   const [aciertos, setAciertos] = useState(0);
   const [fallos, setFallos] = useState<FalloEnPartida[]>([]);
+  const [interacciones, setInteracciones] = useState<InteraccionPartida[]>([]);
 
   if (secuencias.length === 0) {
     return (
@@ -95,6 +96,17 @@ export function OrdenarPasosGame({ payload, onComplete }: OrdenarPasosGameProps)
     setChecked(true);
     setSelectedPos(null);
 
+    setInteracciones((prev) => [
+      ...prev,
+      {
+        item: sequence.enunciado,
+        respuesta_alumno: orderedSteps.map((s) => s.texto).join(' -> '),
+        respuesta_correcta: correctSteps.map((s) => s.texto).join(' -> '),
+        correcto: isSequenceCorrect,
+        explicacion: sequence.explicacion_final,
+      },
+    ]);
+
     if (isSequenceCorrect) {
       setAciertos((prev) => prev + 1);
     } else {
@@ -118,6 +130,7 @@ export function OrdenarPasosGame({ payload, onComplete }: OrdenarPasosGameProps)
         aciertos,
         total: secuencias.length,
         fallos,
+        interacciones,
       });
       return;
     }

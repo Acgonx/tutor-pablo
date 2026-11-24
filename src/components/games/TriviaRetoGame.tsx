@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ArrowRight, CheckCircle2, Flame, HelpCircle, Sparkles, XCircle } from 'lucide-react';
-import type { FalloEnPartida } from '../../types/firestore';
+import type { FalloEnPartida, InteraccionPartida } from '../../types/firestore';
 import type { GameCompletionResult, TriviaRetoPayload } from '../../types/studyMaterial';
 
 interface TriviaRetoGameProps {
@@ -18,6 +18,7 @@ export function TriviaRetoGame({ payload, onComplete }: TriviaRetoGameProps) {
   const [streak, setStreak] = useState(0);
   const [aciertos, setAciertos] = useState(0);
   const [fallos, setFallos] = useState<FalloEnPartida[]>([]);
+  const [interacciones, setInteracciones] = useState<InteraccionPartida[]>([]);
 
   if (questions.length === 0) {
     return (
@@ -36,7 +37,19 @@ export function TriviaRetoGame({ payload, onComplete }: TriviaRetoGameProps) {
     if (hasAnswered) return;
     setSelectedOption(optIndex);
 
-    if (optIndex === question.indice_correcto) {
+    const isHit = optIndex === question.indice_correcto;
+    setInteracciones((prev) => [
+      ...prev,
+      {
+        item: question.pregunta,
+        respuesta_alumno: question.opciones[optIndex] ?? '',
+        respuesta_correcta: question.opciones[question.indice_correcto] ?? '',
+        correcto: isHit,
+        explicacion: question.explicacion,
+      },
+    ]);
+
+    if (isHit) {
       setAciertos((prev) => prev + 1);
       setStreak((prev) => prev + 1);
     } else {
@@ -61,6 +74,7 @@ export function TriviaRetoGame({ payload, onComplete }: TriviaRetoGameProps) {
         aciertos,
         total: questions.length,
         fallos,
+        interacciones,
       });
       return;
     }

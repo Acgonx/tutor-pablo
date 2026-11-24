@@ -2,9 +2,11 @@ import { useCallback, useEffect, useState } from 'react';
 import { ASIGNATURAS_1ESO_CANARIAS } from '../data/curriculumCanarias';
 import { isFirebaseConfigured } from '../lib/firebase';
 import {
+  createArtefacto,
   deleteArtefacto,
   getAllArtefactos,
-  updateArtefactoMiniApp,
+  updateArtefactoEstado,
+  updateArtefactoStudyPack,
 } from '../services/artefactosService';
 import {
   deleteLibretaError,
@@ -14,6 +16,7 @@ import {
 } from '../services/libretaErroresService';
 import {
   runIterateArtifact,
+  runRegenerateEvaluationDoc,
   runStep1OcrAnalysis,
   runStep2GenerateMaterials,
 } from '../services/pedagogicalEngine';
@@ -28,9 +31,11 @@ import type {
 import type { FuenteDocumento, OcrVerificationData, UploadedImageItem } from '../types/ocr';
 import type {
   ArtefactoDoc,
+  EstadoArtefacto,
   GamePayload,
   GeneratedStudyPack,
   NivelDificultad,
+  TipoDocumentoEvaluacion,
 } from '../types/studyMaterial';
 import { prepareImageFile } from '../utils/imageUtils';
 import { ArtefactosPanel } from '../components/dashboard/ArtefactosPanel';
@@ -61,7 +66,7 @@ export function TeacherDashboardPage() {
   const [retosLoading, setRetosLoading] = useState(isFirebaseConfigured);
   const [retosError, setRetosError] = useState<string | null>(null);
 
-  // Flujo del generador (2 pasos + iteración)
+  // Flujo del generador (2 pasos + iteración + regeneración granular)
   const [step, setStep] = useState<GeneratorStep>('upload');
   const [asignatura, setAsignatura] = useState<string>(
     ASIGNATURAS_1ESO_CANARIAS[0]?.nombre ?? 'Matemáticas',
@@ -88,6 +93,10 @@ export function TeacherDashboardPage() {
   const [isIterating, setIsIterating] = useState(false);
   const [iterateError, setIterateError] = useState<string | null>(null);
   const [iterateSuccessMessage, setIterateSuccessMessage] = useState<string | null>(null);
+
+  const [regeneratingDocType, setRegeneratingDocType] =
+    useState<TipoDocumentoEvaluacion | null>(null);
+  const [regenerateDocError, setRegenerateDocError] = useState<string | null>(null);
 
   const loadArtefactos = useCallback(async () => {
     if (!isFirebaseConfigured) return;
@@ -271,7 +280,11 @@ export function TeacherDashboardPage() {
       tema: 'Tema introducido manualmente',
       fuente,
       transcripcion: manualText.trim(),
+      contenido_curricular_completado: '',
+      incluir_completado_curricular: false,
+      criterios_evaluacion_lomloe: [],
       errores_detectados: [],
+      errores_invocados_ids: [],
       observaciones_legibilidad: '',
       notas_adicionales_docente: extraPrompt.trim(),
     });
@@ -283,10 +296,15 @@ export function TeacherDashboardPage() {
     setGenerateError(null);
     setIterateError(null);
     setIterateSuccessMessage(null);
+    setRegenerateDocError(null);
     setIsGenerating(true);
 
     try {
-      const outcome = await runStep2GenerateMaterials(verification, dificultad);
+      const outcome = await runStep2GenerateMaterials(
+        verification,
+        dificultad,
+        libretaItems,
+      );
       setStudyPack(outcome.studyPack);
       setActiveArtefacto(outcome.artefacto);
       setInjectedErrors(outcome.injectedErrors);
@@ -327,6 +345,7 @@ export function TeacherDashboardPage() {
         currentPack: studyPack,
         verification,
         artefacto: activeArtefacto,
+        availableLibretaErrors: libretaItems,
         targetDificultad,
         instruccionCambio,
       });
@@ -366,19 +385,100 @@ export function TeacherDashboardPage() {
     }
   }
 
+  async function handleRegenerateEvaluationDoc(tipoDoc: TipoDocumentoEvaluacion) {
+    if (!studyPack || !verification) return;
+    setRegenerateDocError(null);
+    setRegeneratingDocType(tipoDoc);
+    try {
+      const outcome = await runRegenerateEvaluationDoc({
+        tipoDoc,
+        verification,
+        currentDoc: studyPack.evaluacion_y_fichas[tipoDoc],
+        artefacto: activeArtefacto,
+        availableLibretaErrors: libretaItems,
+        dificultad,
+      });
+
+      const nextPack: GeneratedStudyPack = {
+        ...studyPack,
+        evaluacion_y_fichas: {
+          ...studyPack.evaluacion_y_fichas,
+          [tipoDoc]: outcome.nextDoc,
+        },
+      };
+      setStudyPack(nextPack);
+
+      if (outcome.nextArtefacto) {
+        const updated = outcome.nextArtefacto;
+        setActiveArtefacto(updated);
+        setArtefactosItems((prev) =>
+          prev.map((item) => (item.id === updated.id ? updated : item)),
+        );
+      }
+    } catch (error) {
+      setRegenerateDocError(
+        error instanceof Error
+          ? error.message
+          : 'No se pudo regenerar este documento con Gemini.',
+      );
+    } finally {
+      setRegeneratingDocType(null);
+    }
+  }
+
   function handleOpenArtefacto(artefacto: ArtefactoDoc) {
     setActiveArtefacto(artefacto);
     setStudyPack(artefacto.study_pack);
     setVerification(artefacto.verification);
     setDificultad(artefacto.dificultad);
     setAsignatura(artefacto.asignatura);
-    setInjectedErrors([]);
+    setInjectedErrors(
+      libretaItems.filter((item) =>
+        artefacto.verification.errores_invocados_ids.includes(item.id),
+      ),
+    );
     setSavedNewErrorsCount(0);
     setFirestoreWarning(null);
     setIterateError(null);
     setIterateSuccessMessage(null);
+    setRegenerateDocError(null);
     setStep('results');
     setActiveSection('generador');
+  }
+
+  async function handleToggleArtefactoEstado(
+    id: string,
+    nextEstado: EstadoArtefacto,
+  ) {
+    await updateArtefactoEstado(id, nextEstado);
+    setArtefactosItems((prev) =>
+      prev.map((item) =>
+        item.id === id
+          ? { ...item, estado: nextEstado, updated_at: new Date().toISOString() }
+          : item,
+      ),
+    );
+    if (activeArtefacto?.id === id) {
+      setActiveArtefacto((prev) => (prev ? { ...prev, estado: nextEstado } : prev));
+    }
+  }
+
+  async function handleDuplicateArtefacto(artefacto: ArtefactoDoc) {
+    const cloned = await createArtefacto({
+      asignatura: artefacto.asignatura,
+      tema: `${artefacto.tema} (Copia)`,
+      dificultad: artefacto.dificultad,
+      verification: {
+        ...artefacto.verification,
+        tema: `${artefacto.tema} (Copia)`,
+      },
+      studyPack: {
+        ...artefacto.study_pack,
+        tema: `${artefacto.tema} (Copia)`,
+      },
+      injectedErrorsSummary: artefacto.injected_errors_summary,
+    });
+    setArtefactosItems((prev) => [cloned, ...prev]);
   }
 
   function handleSesionAttached(sesionId: string) {
@@ -409,6 +509,7 @@ export function TeacherDashboardPage() {
     setGenerateError(null);
     setIterateError(null);
     setIterateSuccessMessage(null);
+    setRegenerateDocError(null);
   }
 
   function handleUpdateMiniApp(tipo: TipoJuego, nextPayload: GamePayload) {
@@ -423,7 +524,7 @@ export function TeacherDashboardPage() {
     setStudyPack(nextPack);
 
     if (isFirebaseConfigured && activeArtefacto) {
-      void updateArtefactoMiniApp({
+      void updateArtefactoStudyPack({
         artefacto: activeArtefacto,
         nextStudyPack: nextPack,
       }).then((updated) => {
@@ -476,6 +577,14 @@ export function TeacherDashboardPage() {
     }
   }
 
+  const verificationSubjectErrors = verification
+    ? libretaItems.filter(
+        (item) =>
+          item.asignatura === verification.asignatura &&
+          (item.estado === 'pendiente' || item.estado === 'en_repaso'),
+      )
+    : [];
+
   return (
     <TeacherLayout
       activeSection={activeSection}
@@ -516,15 +625,7 @@ export function TeacherDashboardPage() {
               images={images}
               dificultad={dificultad}
               onDificultadChange={setDificultad}
-              activeLibretaErrorsCount={
-                isFirebaseConfigured
-                  ? libretaItems.filter(
-                      (item) =>
-                        item.asignatura === verification.asignatura &&
-                        (item.estado === 'pendiente' || item.estado === 'en_repaso'),
-                    ).length
-                  : null
-              }
+              availableSubjectErrors={verificationSubjectErrors}
               isGenerating={isGenerating}
               errorMessage={generateError}
               onChange={setVerification}
@@ -546,7 +647,10 @@ export function TeacherDashboardPage() {
               isIterating={isIterating}
               iterateError={iterateError}
               iterateSuccessMessage={iterateSuccessMessage}
+              regeneratingDocType={regeneratingDocType}
+              regenerateDocError={regenerateDocError}
               onIterateArtifact={handleIterateArtifact}
+              onRegenerateEvaluationDoc={handleRegenerateEvaluationDoc}
               onSesionAttached={handleSesionAttached}
               onBackToVerification={() => setStep('verify')}
               onStartNewSession={handleStartNewSession}
@@ -564,6 +668,8 @@ export function TeacherDashboardPage() {
           errorMessage={artefactosError}
           onRefresh={() => void loadArtefactos()}
           onOpenArtefacto={handleOpenArtefacto}
+          onToggleEstado={handleToggleArtefactoEstado}
+          onDuplicateArtefacto={handleDuplicateArtefacto}
           onDelete={handleDeleteArtefacto}
         />
       )}

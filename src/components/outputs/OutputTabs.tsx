@@ -26,6 +26,7 @@ import type {
   GamePayload,
   GeneratedStudyPack,
   NivelDificultad,
+  TipoDocumentoEvaluacion,
 } from '../../types/studyMaterial';
 import { AndamiajeTab } from './AndamiajeTab';
 import { EsquemaVisualTab } from './EsquemaVisualTab';
@@ -45,10 +46,13 @@ interface OutputTabsProps {
   isIterating: boolean;
   iterateError: string | null;
   iterateSuccessMessage: string | null;
+  regeneratingDocType: TipoDocumentoEvaluacion | null;
+  regenerateDocError: string | null;
   onIterateArtifact: (
     targetDificultad: NivelDificultad,
     instruccionCambio: string,
   ) => Promise<void>;
+  onRegenerateEvaluationDoc: (tipoDoc: TipoDocumentoEvaluacion) => Promise<void>;
   onSesionAttached: (sesionId: string) => void;
   onBackToVerification: () => void;
   onStartNewSession: () => void;
@@ -63,7 +67,7 @@ const TABS: ReadonlyArray<{
 }> = [
   { id: 'esquema', label: 'Esquema Visual', icon: GitBranch },
   { id: 'andamiaje', label: 'Explicación con Andamiaje', icon: Layers },
-  { id: 'examen', label: 'Examen / Ficha PDF', icon: FileSpreadsheet },
+  { id: 'examen', label: 'Fichas (3 niveles) y Examen', icon: FileSpreadsheet },
   { id: 'miniapps', label: 'Mini-Apps iPad', icon: Gamepad2 },
 ];
 
@@ -101,7 +105,10 @@ export function OutputTabs({
   isIterating,
   iterateError,
   iterateSuccessMessage,
+  regeneratingDocType,
+  regenerateDocError,
   onIterateArtifact,
+  onRegenerateEvaluationDoc,
   onSesionAttached,
   onBackToVerification,
   onStartNewSession,
@@ -350,12 +357,13 @@ export function OutputTabs({
           <div className="flex flex-wrap items-center gap-2 font-bold">
             <Sparkles className="h-4 w-4 text-amber-600" />
             <span>
-              Repetición Espaciada aplicada: {injectedErrors.length}{' '}
-              {injectedErrors.length === 1 ? 'error activo integrado' : 'errores activos integrados'}
+              {injectedErrors.length > 0
+                ? `Artefacto con ${injectedErrors.length} error(es) previo(s) invocado(s) por ti`
+                : 'Artefacto aislado: generado solo con este material (sin mezclar otros temas)'}
             </span>
             {savedNewErrorsCount > 0 && (
               <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-bold text-emerald-700 ring-1 ring-emerald-200">
-                +{savedNewErrorsCount} guardado(s) en Libreta
+                +{savedNewErrorsCount} error(es) real(es) de Pablo guardado(s) en Libreta
               </span>
             )}
           </div>
@@ -460,7 +468,10 @@ export function OutputTabs({
         <ExamenPdfTab
           asignatura={studyPack.asignatura}
           tema={studyPack.tema}
-          data={studyPack.examen_pdf}
+          bundle={studyPack.evaluacion_y_fichas}
+          regeneratingDocType={regeneratingDocType}
+          regenerateError={regenerateDocError}
+          onRegenerateDoc={onRegenerateEvaluationDoc}
         />
       )}
       {activeTab === 'miniapps' && (

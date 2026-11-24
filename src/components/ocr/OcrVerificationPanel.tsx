@@ -2,7 +2,10 @@ import { useState } from 'react';
 import {
   AlertCircle,
   ArrowLeft,
+  BookOpen,
   CheckCircle2,
+  ChevronDown,
+  ChevronUp,
   Eye,
   Loader2,
   Plus,
@@ -11,9 +14,11 @@ import {
   X,
 } from 'lucide-react';
 import { isGeminiConfigured } from '../../lib/gemini';
+import type { LibretaErrorDoc } from '../../types/firestore';
 import type {
   DetectedErrorDraft,
   OcrVerificationData,
+  OrigenErrorOcr,
   SeveridadError,
   UploadedImageItem,
 } from '../../types/ocr';
@@ -29,12 +34,34 @@ const DIFICULTAD_CHOICES: ReadonlyArray<{
   { value: 'reto_alto', label: 'Reto alto' },
 ];
 
+const ORIGEN_OPTIONS: ReadonlyArray<{
+  value: Exclude<OrigenErrorOcr, 'pendiente_confirmar'>;
+  label: string;
+  activeClass: string;
+}> = [
+  {
+    value: 'error_pablo',
+    label: 'Error real de Pablo',
+    activeClass: 'border-rose-600 bg-rose-600 text-white',
+  },
+  {
+    value: 'error_material',
+    label: 'Del propio material / libro',
+    activeClass: 'border-amber-600 bg-amber-600 text-white',
+  },
+  {
+    value: 'descartado',
+    label: 'Descartar',
+    activeClass: 'border-slate-600 bg-slate-600 text-white',
+  },
+];
+
 interface OcrVerificationPanelProps {
   verification: OcrVerificationData;
   images: UploadedImageItem[];
   dificultad: NivelDificultad;
   onDificultadChange: (value: NivelDificultad) => void;
-  activeLibretaErrorsCount: number | null;
+  availableSubjectErrors: LibretaErrorDoc[];
   isGenerating: boolean;
   errorMessage: string | null;
   onChange: (next: OcrVerificationData) => void;
@@ -47,7 +74,7 @@ export function OcrVerificationPanel({
   images,
   dificultad,
   onDificultadChange,
-  activeLibretaErrorsCount,
+  availableSubjectErrors,
   isGenerating,
   errorMessage,
   onChange,
@@ -55,6 +82,7 @@ export function OcrVerificationPanel({
   onConfirmAndGenerate,
 }: OcrVerificationPanelProps) {
   const [zoomedImage, setZoomedImage] = useState<UploadedImageItem | null>(null);
+  const [showInvokeErrors, setShowInvokeErrors] = useState(false);
 
   function updateErrorDraft(id: string, patch: Partial<DetectedErrorDraft>) {
     onChange({
@@ -87,14 +115,29 @@ export function OcrVerificationPanel({
           concepto_fallado: '',
           explicacion_error: '',
           severidad: 'media',
-          incluir_en_libreta: true,
+          origen: 'error_pablo',
+          guardar_en_libreta: true,
         },
       ],
     });
   }
 
-  const errorsSelectedCount = verification.errores_detectados.filter(
-    (e) => e.incluir_en_libreta && e.concepto_fallado.trim(),
+  function toggleInvokedError(errorId: string) {
+    const exists = verification.errores_invocados_ids.includes(errorId);
+    onChange({
+      ...verification,
+      errores_invocados_ids: exists
+        ? verification.errores_invocados_ids.filter((id) => id !== errorId)
+        : [...verification.errores_invocados_ids, errorId],
+    });
+  }
+
+  const unconfirmedCount = verification.errores_detectados.filter(
+    (e) => e.origen === 'pendiente_confirmar',
+  ).length;
+
+  const pabloErrorsToSaveCount = verification.errores_detectados.filter(
+    (e) => e.origen === 'error_pablo' && e.guardar_en_libreta && e.concepto_fallado.trim(),
   ).length;
 
   return (
@@ -103,14 +146,14 @@ export function OcrVerificationPanel({
         <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 pb-4">
           <div>
             <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1 text-xs font-bold text-amber-800 ring-1 ring-amber-200">
-              Validación OCR en 2 pasos · Paso 1 editable
+              Validación OCR y Curricular · Paso 1 editable
             </span>
             <h2 className="mt-2 text-xl font-bold text-slate-900">
-              Verificación de lectura y errores
+              Verificación de lectura, currículo y origen de errores
             </h2>
             <p className="mt-1 text-sm text-slate-600">
-              Revisa la transcripción de Gemini antes de generar materiales. Si hay algún fallo de
-              lectura manuscrita o quieres añadir errores concretos de Pablo, edítalo aquí.
+              Revisa lo leído por Gemini, ajusta el contenido completado del currículo y
+              confirma si cada error detectado es realmente de Pablo o del propio material.
             </p>
           </div>
           <span className="rounded-xl bg-indigo-50 px-3 py-1.5 text-xs font-bold text-indigo-700">
@@ -131,7 +174,7 @@ export function OcrVerificationPanel({
         {images.length > 0 && (
           <div className="mt-4">
             <p className="mb-2 text-xs font-bold tracking-wide text-slate-500 uppercase">
-              Fotos originales de referencia (haz clic para ampliar)
+              Archivos de referencia
             </p>
             <div className="flex flex-wrap gap-2.5">
               {images.map((img) =>
@@ -190,7 +233,7 @@ export function OcrVerificationPanel({
               onChange={(ev) =>
                 onChange({ ...verification, notas_adicionales_docente: ev.target.value })
               }
-              placeholder="Ej: Priorizar ejercicios prácticos de nivel medio"
+              placeholder="Ej: Priorizar problemas aplicados y cálculo mental"
               className="mt-1.5 w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 focus:outline-none"
             />
           </div>
@@ -201,27 +244,77 @@ export function OcrVerificationPanel({
             htmlFor="ocr-transcripcion"
             className="block text-sm font-semibold text-slate-700"
           >
-            Transcripción editable del contenido leído
+            Transcripción editable del material subido
           </label>
           <textarea
             id="ocr-transcripcion"
-            rows={9}
+            rows={7}
             value={verification.transcripcion}
             onChange={(ev) => onChange({ ...verification, transcripcion: ev.target.value })}
             className="mt-1.5 w-full rounded-xl border border-slate-300 bg-slate-50/50 px-3.5 py-3 font-mono text-xs leading-relaxed text-slate-900 focus:border-indigo-500 focus:bg-white focus:ring-2 focus:ring-indigo-200 focus:outline-none sm:text-sm"
           />
         </div>
 
+        {/* Compleción curricular LOMLOE Canarias */}
+        <div className="mt-5 rounded-2xl border border-sky-200 bg-sky-50/50 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2 text-sm font-bold text-sky-950">
+              <BookOpen className="h-4 w-4 text-sky-600" />
+              Contenido completado según el currículo (1º ESO Canarias · Decreto 30/2023)
+            </div>
+            <label className="inline-flex cursor-pointer items-center gap-2 text-xs font-bold text-sky-900">
+              <input
+                type="checkbox"
+                checked={verification.incluir_completado_curricular}
+                onChange={(ev) =>
+                  onChange({
+                    ...verification,
+                    incluir_completado_curricular: ev.target.checked,
+                  })
+                }
+                className="h-4 w-4 rounded border-sky-300 text-indigo-600"
+              />
+              Incluir compleción curricular al generar
+            </label>
+          </div>
+
+          {verification.criterios_evaluacion_lomloe.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {verification.criterios_evaluacion_lomloe.map((criterio, idx) => (
+                <span
+                  key={idx}
+                  className="rounded-lg bg-white px-2.5 py-1 text-[11px] font-semibold text-sky-900 ring-1 ring-sky-200"
+                >
+                  {criterio}
+                </span>
+              ))}
+            </div>
+          )}
+
+          <textarea
+            rows={4}
+            value={verification.contenido_curricular_completado}
+            onChange={(ev) =>
+              onChange({
+                ...verification,
+                contenido_curricular_completado: ev.target.value,
+              })
+            }
+            placeholder="Aquí aparecerá el contenido que falte en los apuntes para completar los saberes básicos oficiales de 1º ESO..."
+            className="mt-3 w-full rounded-xl border border-sky-200 bg-white px-3.5 py-2.5 text-xs leading-relaxed text-slate-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 focus:outline-none sm:text-sm"
+          />
+        </div>
+
+        {/* Origen de errores detectados */}
         <div className="mt-6">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <div>
               <h3 className="text-base font-bold text-slate-900">
-                Errores detectados para reforzar ({verification.errores_detectados.length})
+                Errores detectados en el material ({verification.errores_detectados.length})
               </h3>
               <p className="text-xs text-slate-500">
-                Los errores marcados se guardarán en{' '}
-                <code className="rounded bg-slate-100 px-1">libreta_errores</code> para repetición
-                espaciada.
+                Indica en cada uno si es un <strong>error real de Pablo</strong> o si forma
+                parte del propio libro/apuntes (ej. ejercicios de «encuentra el fallo»).
               </p>
             </div>
             <button
@@ -236,98 +329,203 @@ export function OcrVerificationPanel({
 
           {verification.errores_detectados.length === 0 ? (
             <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4 text-center text-sm text-slate-500">
-              No se detectaron fallos concretos en esta lectura. Puedes añadir alguno manualmente o
+              No se detectaron fallos concretos en esta lectura. Puedes añadir uno manualmente o
               continuar directamente.
             </div>
           ) : (
             <div className="space-y-3">
-              {verification.errores_detectados.map((err, idx) => (
-                <div
-                  key={err.id}
-                  className="rounded-xl border border-slate-200 bg-slate-50/70 p-4"
-                >
-                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                    <span className="text-xs font-bold text-slate-500 uppercase">
-                      Error #{idx + 1}
-                    </span>
-                    <div className="flex flex-wrap items-center gap-3">
-                      <select
-                        value={err.severidad}
-                        onChange={(ev) =>
-                          updateErrorDraft(err.id, {
-                            severidad: ev.target.value as SeveridadError,
-                          })
-                        }
-                        aria-label="Severidad del error"
-                        className="rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700"
-                      >
-                        <option value="alta">Severidad alta</option>
-                        <option value="media">Severidad media</option>
-                        <option value="baja">Severidad baja</option>
-                      </select>
+              {verification.errores_detectados.map((err, idx) => {
+                const isPending = err.origen === 'pendiente_confirmar';
+                return (
+                  <div
+                    key={err.id}
+                    className={`rounded-xl border p-4 ${
+                      isPending
+                        ? 'border-amber-400 bg-amber-50/60'
+                        : err.origen === 'descartado'
+                          ? 'border-slate-200 bg-slate-50 opacity-65'
+                          : 'border-slate-200 bg-slate-50/70'
+                    }`}
+                  >
+                    <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-xs font-bold text-slate-600 uppercase">
+                          Hallazgo #{idx + 1}
+                        </span>
+                        {isPending && (
+                          <span className="rounded-full bg-amber-200 px-2.5 py-0.5 text-[11px] font-bold text-amber-950">
+                            Confirmar origen
+                          </span>
+                        )}
+                      </div>
 
-                      <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs font-semibold text-slate-700">
-                        <input
-                          type="checkbox"
-                          checked={err.incluir_en_libreta}
+                      <div className="flex flex-wrap items-center gap-2">
+                        <select
+                          value={err.severidad}
                           onChange={(ev) =>
-                            updateErrorDraft(err.id, { incluir_en_libreta: ev.target.checked })
+                            updateErrorDraft(err.id, {
+                              severidad: ev.target.value as SeveridadError,
+                            })
                           }
-                          className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                          aria-label="Severidad del error"
+                          className="rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700"
+                        >
+                          <option value="alta">Severidad alta</option>
+                          <option value="media">Severidad media</option>
+                          <option value="baja">Severidad baja</option>
+                        </select>
+
+                        <button
+                          type="button"
+                          onClick={() => removeErrorDraft(err.id)}
+                          aria-label="Eliminar error"
+                          className="rounded-lg p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="mb-3 flex flex-wrap items-center gap-2">
+                      {ORIGEN_OPTIONS.map((opt) => {
+                        const isSelected = err.origen === opt.value;
+                        return (
+                          <button
+                            key={opt.value}
+                            type="button"
+                            onClick={() =>
+                              updateErrorDraft(err.id, {
+                                origen: opt.value,
+                                guardar_en_libreta: opt.value === 'error_pablo',
+                              })
+                            }
+                            className={`rounded-lg border px-3 py-1.5 text-xs font-bold transition-colors ${
+                              isSelected
+                                ? opt.activeClass
+                                : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-100'
+                            }`}
+                          >
+                            {opt.label}
+                          </button>
+                        );
+                      })}
+
+                      {err.origen === 'error_pablo' && (
+                        <label className="ml-auto inline-flex cursor-pointer items-center gap-1.5 text-xs font-semibold text-slate-700">
+                          <input
+                            type="checkbox"
+                            checked={err.guardar_en_libreta}
+                            onChange={(ev) =>
+                              updateErrorDraft(err.id, {
+                                guardar_en_libreta: ev.target.checked,
+                              })
+                            }
+                            className="h-4 w-4 rounded border-slate-300 text-indigo-600"
+                          />
+                          Guardar en Libreta de Errores
+                        </label>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-600">
+                          Concepto
+                        </label>
+                        <input
+                          type="text"
+                          value={err.concepto_fallado}
+                          onChange={(ev) =>
+                            updateErrorDraft(err.id, { concepto_fallado: ev.target.value })
+                          }
+                          className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
                         />
-                        Guardar en Libreta
-                      </label>
-
-                      <button
-                        type="button"
-                        onClick={() => removeErrorDraft(err.id)}
-                        aria-label="Eliminar error"
-                        className="rounded-lg p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+                      </div>
+                      <div className="md:col-span-2">
+                        <label className="block text-xs font-semibold text-slate-600">
+                          Explicación del fallo y forma correcta
+                        </label>
+                        <input
+                          type="text"
+                          value={err.explicacion_error}
+                          onChange={(ev) =>
+                            updateErrorDraft(err.id, { explicacion_error: ev.target.value })
+                          }
+                          className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+                        />
+                      </div>
                     </div>
                   </div>
-
-                  <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-600">
-                        Concepto fallado
-                      </label>
-                      <input
-                        type="text"
-                        value={err.concepto_fallado}
-                        onChange={(ev) =>
-                          updateErrorDraft(err.id, { concepto_fallado: ev.target.value })
-                        }
-                        placeholder="Ej: Suma de fracciones con distinto denominador"
-                        className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
-                      />
-                    </div>
-                    <div className="md:col-span-2">
-                      <label className="block text-xs font-semibold text-slate-600">
-                        Explicación del fallo y forma correcta
-                      </label>
-                      <input
-                        type="text"
-                        value={err.explicacion_error}
-                        onChange={(ev) =>
-                          updateErrorDraft(err.id, { explicacion_error: ev.target.value })
-                        }
-                        placeholder="Ej: Sumó denominadores directamente; debe hallar el m.c.m. primero."
-                        className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
-                      />
-                    </div>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
 
+        {/* Invocación explícita de errores previos (sin mezcla automática) */}
         <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4">
+          <button
+            type="button"
+            onClick={() => setShowInvokeErrors((prev) => !prev)}
+            className="flex w-full items-center justify-between gap-2 text-left text-sm font-bold text-slate-800"
+          >
+            <span>
+              Invocar errores previos de la Libreta en esta sesión (opcional ·{' '}
+              {verification.errores_invocados_ids.length} seleccionado(s))
+            </span>
+            {showInvokeErrors ? (
+              <ChevronUp className="h-4 w-4" />
+            ) : (
+              <ChevronDown className="h-4 w-4" />
+            )}
+          </button>
+          <p className="mt-1 text-xs text-slate-500">
+            Este artefacto es independiente y no mezcla otros temas por defecto. Solo si
+            marcas alguno aquí abajo se integrará como repaso.
+          </p>
+
+          {showInvokeErrors && (
+            <div className="mt-3 space-y-2">
+              {availableSubjectErrors.length === 0 ? (
+                <p className="text-xs text-slate-500">
+                  No hay errores pendientes o en repaso en Firestore para {verification.asignatura}.
+                </p>
+              ) : (
+                availableSubjectErrors.map((err) => {
+                  const checked = verification.errores_invocados_ids.includes(err.id);
+                  return (
+                    <label
+                      key={err.id}
+                      className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-slate-200 bg-white p-3 text-xs"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => toggleInvokedError(err.id)}
+                        className="mt-0.5 h-4 w-4 rounded border-slate-300 text-indigo-600"
+                      />
+                      <div>
+                        <p className="font-bold text-slate-900">
+                          {err.concepto_fallado}{' '}
+                          <span className="font-normal text-slate-500">
+                            ({err.tema} · {err.veces_fallado}x)
+                          </span>
+                        </p>
+                        {err.explicacion_error && (
+                          <p className="mt-0.5 text-slate-600">{err.explicacion_error}</p>
+                        )}
+                      </div>
+                    </label>
+                  );
+                })
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
           <p className="text-xs font-bold tracking-wide text-slate-600 uppercase">
-            Nivel de dificultad inicial del artefacto
+            Nivel de dificultad global inicial del artefacto
           </p>
           <div className="mt-2.5 flex flex-wrap gap-2">
             {DIFICULTAD_CHOICES.map((opt) => (
@@ -350,21 +548,27 @@ export function OcrVerificationPanel({
         <div className="mt-4 rounded-xl border border-indigo-200 bg-indigo-50/70 p-4 text-sm text-indigo-950">
           <div className="flex items-start gap-2.5">
             <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-indigo-600" />
-            <div>
-              <p className="font-bold">Motor Pedagógico listo (Repetición Espaciada + LOMLOE):</p>
-              <p className="mt-0.5 text-xs text-indigo-900">
-                Al confirmar, se guardarán <strong>{errorsSelectedCount}</strong> errores nuevos/actualizados
-                y se integrarán automáticamente los errores previos en estado{' '}
-                <code>pendiente</code> o <code>en_repaso</code> de{' '}
-                <strong>{verification.asignatura}</strong>
-                {activeLibretaErrorsCount !== null
-                  ? ` (actualmente ${activeLibretaErrorsCount} registrados en Firestore)`
-                  : ''}
-                .
+            <div className="text-xs text-indigo-900">
+              <p className="text-sm font-bold text-indigo-950">
+                Se generará un artefacto independiente con:
+              </p>
+              <p className="mt-1">
+                Esquema Visual + Andamiaje + <strong>3 Fichas graduadas + 1 Simulación de Examen</strong>{' '}
+                + 4 Mini-Apps (incluyendo <strong>¡Caza al Error!</strong>). Se guardarán{' '}
+                <strong>{pabloErrorsToSaveCount}</strong> error(es) real(es) de Pablo y se
+                invocarán <strong>{verification.errores_invocados_ids.length}</strong> error(es)
+                previo(s).
               </p>
             </div>
           </div>
         </div>
+
+        {unconfirmedCount > 0 && (
+          <div className="mt-4 rounded-xl border border-amber-300 bg-amber-50 p-3.5 text-sm font-semibold text-amber-900">
+            Tienes {unconfirmedCount} hallazgo(s) sin clasificar. Indica arriba si es «Error real
+            de Pablo», «Del propio material / libro» o «Descartar» antes de continuar.
+          </div>
+        )}
 
         {errorMessage && (
           <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-3.5 text-sm font-medium text-rose-800">
@@ -380,13 +584,14 @@ export function OcrVerificationPanel({
             className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
           >
             <ArrowLeft className="h-4 w-4" />
-            Volver a subir fotos
+            Volver a subir archivos
           </button>
 
           <button
             type="button"
             disabled={
               isGenerating ||
+              unconfirmedCount > 0 ||
               !verification.transcripcion.trim() ||
               !isGeminiConfigured
             }
@@ -396,12 +601,12 @@ export function OcrVerificationPanel({
             {isGenerating ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
-                Generando 4 materiales pedagógicos...
+                Generando artefacto completo...
               </>
             ) : (
               <>
                 <Sparkles className="h-4 w-4" />
-                Confirmar lectura y generar materiales (Paso 2)
+                Confirmar y generar artefacto (Paso 2)
               </>
             )}
           </button>

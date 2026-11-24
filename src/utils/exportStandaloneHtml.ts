@@ -261,6 +261,7 @@ export function buildStandaloneHtml(params: {
         flashcards: 'Flashcards · Active Recall',
         clasificar: 'Clasificar · Tap to Place',
         trivia_reto: 'Trivia Reto',
+        caza_error: '¡Caza al Error! · Detective',
         ordenar_pasos: 'Ordenar Pasos'
       };
 
@@ -677,9 +678,78 @@ export function buildStandaloneHtml(params: {
         loadSeq();
       }
 
+      function startCazaError() {
+        var casos = payload.casos || [];
+        var idx = 0;
+        var chosen = null;
+        var aciertos = 0;
+        var fallos = [];
+
+        function draw() {
+          if (idx >= casos.length) {
+            renderSummary(aciertos, casos.length, fallos, startCazaError);
+            return;
+          }
+          var caso = casos[idx];
+          var pct = Math.round((idx / Math.max(1, casos.length)) * 100);
+          var html = '<div class="progress-wrap"><span>Caso ' + (idx + 1) + ' de ' + casos.length + '</span>' +
+            (caso.es_repaso_libreta ? '<span class="badge badge-repaso">Repaso Libreta</span>' : '') + '</div>' +
+            '<div class="progress-bar"><div class="progress-fill" style="width:' + pct + '%"></div></div>' +
+            '<p style="margin:0 0 6px;font-size:12px;font-weight:700;color:#4f46e5;text-transform:uppercase">Toca la afirmación con trampa o error</p>' +
+            '<h2 style="margin:0 0 16px;font-size:19px">' + esc(caso.contexto) + '</h2>';
+
+          (caso.afirmaciones || []).forEach(function (st, i) {
+            var cls = 'option-btn';
+            if (chosen !== null) {
+              if (i === caso.indice_error) cls += ' correct';
+              else if (i === chosen) cls += ' wrong';
+            }
+            html += '<button class="' + cls + '" data-ce="' + i + '" ' + (chosen !== null ? 'disabled' : '') + '>' +
+              '<span style="font-weight:800">' + (i + 1) + '.</span> <span>' + esc(st) + '</span></button>';
+          });
+
+          if (chosen !== null) {
+            var ok = chosen === caso.indice_error;
+            html += '<div class="feedback-box ' + (ok ? 'feedback-ok' : 'feedback-err') + '">' +
+              '<strong>' + (ok ? '¡Trampa cazada!' : 'Esa era correcta.') + '</strong> ' + esc(caso.explicacion_correccion) + '</div>' +
+              '<div class="btn-row"><button id="ce-next" class="btn-primary">' +
+              (idx + 1 < casos.length ? 'Siguiente caso' : 'Ver resultado') + '</button></div>';
+          }
+
+          app.innerHTML = html;
+
+          if (chosen === null) {
+            app.querySelectorAll('[data-ce]').forEach(function (btn) {
+              btn.addEventListener('click', function () {
+                chosen = Number(btn.getAttribute('data-ce'));
+                if (chosen === caso.indice_error) {
+                  aciertos += 1;
+                } else {
+                  fallos.push({
+                    concepto: caso.concepto_clave || caso.contexto,
+                    detalle: caso.explicacion_correccion,
+                    respuesta_alumno: caso.afirmaciones[chosen],
+                    respuesta_correcta: caso.afirmaciones[caso.indice_error]
+                  });
+                }
+                draw();
+              });
+            });
+          } else {
+            document.getElementById('ce-next').addEventListener('click', function () {
+              idx += 1;
+              chosen = null;
+              draw();
+            });
+          }
+        }
+        draw();
+      }
+
       if (payload.tipo_juego === 'flashcards') startFlashcards();
       else if (payload.tipo_juego === 'clasificar') startClasificar();
       else if (payload.tipo_juego === 'trivia_reto') startTrivia();
+      else if (payload.tipo_juego === 'caza_error') startCazaError();
       else if (payload.tipo_juego === 'ordenar_pasos') startOrdenar();
     })();
   </script>

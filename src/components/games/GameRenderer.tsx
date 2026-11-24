@@ -1,7 +1,16 @@
 import { useState } from 'react';
-import { CheckCircle2, CloudCheck, Loader2, RotateCcw, Trophy } from 'lucide-react';
+import {
+  CheckCircle2,
+  CloudCheck,
+  Loader2,
+  Printer,
+  RotateCcw,
+  Trophy,
+  XCircle,
+} from 'lucide-react';
 import type { TipoJuego } from '../../types/firestore';
 import type { GameCompletionResult, GamePayload } from '../../types/studyMaterial';
+import { CazaErrorGame } from './CazaErrorGame';
 import { ClasificarGame } from './ClasificarGame';
 import { FlashcardsGame } from './FlashcardsGame';
 import { OrdenarPasosGame } from './OrdenarPasosGame';
@@ -11,6 +20,7 @@ const GAME_LABELS: Record<TipoJuego, string> = {
   flashcards: 'Flashcards · Active Recall',
   clasificar: 'Clasificar · Tap to Place',
   trivia_reto: 'Trivia Reto',
+  caza_error: '¡Caza al Error! · Detective',
   ordenar_pasos: 'Ordenar Pasos',
 };
 
@@ -35,8 +45,10 @@ export function GameRenderer({
 }: GameRendererProps) {
   const [playKey, setPlayKey] = useState(0);
   const [result, setResult] = useState<GameCompletionResult | null>(null);
+  const [completedDateLabel, setCompletedDateLabel] = useState('');
 
   function handleGameComplete(gameResult: GameCompletionResult) {
+    setCompletedDateLabel(new Date().toLocaleDateString('es-ES'));
     setResult(gameResult);
     if (onComplete) {
       void onComplete(gameResult);
@@ -45,12 +57,13 @@ export function GameRenderer({
 
   function handleRestart() {
     setResult(null);
+    setCompletedDateLabel('');
     setPlayKey((prev) => prev + 1);
   }
 
   return (
     <div className="space-y-4">
-      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="no-print rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <div className="mb-2 flex flex-wrap items-center gap-2">
           <span className="rounded-full bg-indigo-100 px-3 py-0.5 text-xs font-bold text-indigo-800">
             {asignatura}
@@ -88,6 +101,13 @@ export function GameRenderer({
               onComplete={handleGameComplete}
             />
           )}
+          {payload.tipo_juego === 'caza_error' && (
+            <CazaErrorGame
+              key={`ce_${playKey}`}
+              payload={payload}
+              onComplete={handleGameComplete}
+            />
+          )}
           {payload.tipo_juego === 'ordenar_pasos' && (
             <OrdenarPasosGame
               key={`or_${playKey}`}
@@ -97,9 +117,21 @@ export function GameRenderer({
           )}
         </div>
       ) : (
-        <div className="space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="print-sheet space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="print-only border-b border-slate-300 pb-3">
+            <p className="text-xs font-bold text-slate-500 uppercase">
+              Informe de Interacciones · {asignatura} · {GAME_LABELS[payload.tipo_juego]}
+            </p>
+            <h2 className="mt-1 text-xl font-extrabold text-slate-900">
+              {titulo || payload.titulo}
+            </h2>
+            <p className="text-xs text-slate-600">
+              Alumno: Pablo · Fecha: {completedDateLabel}
+            </p>
+          </div>
+
           <div className="text-center">
-            <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-100 text-indigo-700">
+            <div className="no-print mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-100 text-indigo-700">
               <Trophy className="h-7 w-7" />
             </div>
             <p className="text-sm font-bold tracking-wide text-slate-500 uppercase">
@@ -122,20 +154,17 @@ export function GameRenderer({
           </div>
 
           {mode === 'student' && (
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3.5 text-sm">
+            <div className="no-print rounded-xl border border-slate-200 bg-slate-50 p-3.5 text-sm">
               {savingStatus === 'saving' && (
                 <div className="flex items-center gap-2 font-medium text-slate-700">
                   <Loader2 className="h-4 w-4 animate-spin text-indigo-600" />
-                  Guardando tu puntuación y actualizando la libreta de repaso...
+                  Guardando tu puntuación e interacciones en Firestore...
                 </div>
               )}
               {savingStatus === 'saved' && (
                 <div className="flex items-center gap-2 font-semibold text-emerald-700">
                   <CloudCheck className="h-4 w-4" />
-                  Resultado guardado correctamente.
-                  {result.fallos.length > 0
-                    ? ' Los fallos se han añadido a tu libreta para repasarlos más adelante.'
-                    : ''}
+                  Resultado e interacciones guardados correctamente.
                 </div>
               )}
               {savingStatus === 'error' && (
@@ -146,43 +175,69 @@ export function GameRenderer({
             </div>
           )}
 
-          {result.fallos.length > 0 ? (
-            <div className="rounded-xl border border-rose-200 bg-rose-50 p-4">
-              <h3 className="text-sm font-bold text-rose-900">
-                Conceptos que conviene repasar ({result.fallos.length}):
+          {result.interacciones.length > 0 && (
+            <div className="space-y-2 pt-2">
+              <h3 className="text-sm font-bold text-slate-900">
+                Detalle completo de respuestas ({result.interacciones.length})
               </h3>
-              <ul className="mt-2 space-y-2 text-sm text-rose-900">
-                {result.fallos.map((fallo, idx) => (
-                  <li
-                    key={`${fallo.concepto}_${idx}`}
-                    className="rounded-lg bg-white/80 p-3 ring-1 ring-rose-200"
+              <div className="space-y-2">
+                {result.interacciones.map((inter, idx) => (
+                  <div
+                    key={idx}
+                    className={`print-avoid-break print-preserve-color rounded-xl border p-3 text-xs ${
+                      inter.correcto
+                        ? 'border-emerald-200 bg-emerald-50/70 text-emerald-950'
+                        : 'border-rose-200 bg-rose-50/70 text-rose-950'
+                    }`}
                   >
-                    <p className="font-bold">{fallo.concepto}</p>
-                    <p className="mt-0.5 text-slate-700">{fallo.detalle}</p>
-                    {fallo.respuesta_correcta && (
-                      <p className="mt-1 text-xs font-semibold text-emerald-700">
-                        Respuesta correcta: {fallo.respuesta_correcta}
-                      </p>
-                    )}
-                  </li>
+                    <div className="flex items-start gap-2">
+                      {inter.correcto ? (
+                        <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+                      ) : (
+                        <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-rose-600" />
+                      )}
+                      <div className="space-y-0.5">
+                        <p className="font-bold">
+                          {idx + 1}. {inter.item}
+                        </p>
+                        <p>
+                          <strong>Respuesta de Pablo:</strong> {inter.respuesta_alumno}
+                        </p>
+                        {!inter.correcto && inter.respuesta_correcta && (
+                          <p className="font-semibold text-emerald-800">
+                            <strong>Correcta:</strong> {inter.respuesta_correcta}
+                          </p>
+                        )}
+                        {inter.explicacion && (
+                          <p className="text-slate-700">{inter.explicacion}</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
                 ))}
-              </ul>
-            </div>
-          ) : (
-            <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-semibold text-emerald-900">
-              <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-600" />
-              ¡Pleno sin errores! Dominas este bloque.
+              </div>
             </div>
           )}
 
-          <button
-            type="button"
-            onClick={handleRestart}
-            className="flex min-h-14 w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-6 py-3 text-base font-bold text-white shadow-sm hover:bg-indigo-700"
-          >
-            <RotateCcw className="h-5 w-5" />
-            Volver a jugar
-          </button>
+          <div className="no-print grid grid-cols-1 gap-3 pt-2 sm:grid-cols-2">
+            <button
+              type="button"
+              onClick={() => window.print()}
+              className="flex min-h-14 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-5 py-3 text-base font-bold text-slate-800 hover:bg-slate-50"
+            >
+              <Printer className="h-5 w-5" />
+              Imprimir informe PDF
+            </button>
+
+            <button
+              type="button"
+              onClick={handleRestart}
+              className="flex min-h-14 items-center justify-center gap-2 rounded-xl bg-indigo-600 px-6 py-3 text-base font-bold text-white shadow-sm hover:bg-indigo-700"
+            >
+              <RotateCcw className="h-5 w-5" />
+              Volver a jugar
+            </button>
+          </div>
         </div>
       )}
     </div>

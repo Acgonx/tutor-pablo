@@ -18,12 +18,13 @@ import type { TipoJuego } from '../types/firestore';
 
 type StudentTab = 'esquema' | 'andamiaje' | 'juegos';
 
-const GAME_OPTIONS: ReadonlyArray<{ tipo: TipoJuego; label: string }> = [
-  { tipo: 'flashcards', label: 'Flashcards' },
-  { tipo: 'clasificar', label: 'Clasificar' },
-  { tipo: 'trivia_reto', label: 'Trivia Reto' },
-  { tipo: 'ordenar_pasos', label: 'Ordenar Pasos' },
-];
+const GAME_LABELS: Record<TipoJuego, string> = {
+  flashcards: 'Flashcards',
+  clasificar: 'Clasificar',
+  trivia_reto: 'Trivia Reto',
+  caza_error: '¡Caza al Error!',
+  ordenar_pasos: 'Ordenar Pasos',
+};
 
 export function StudentSessionPage() {
   const { id } = useParams<{ id: string }>();
@@ -169,34 +170,51 @@ export function StudentSessionPage() {
               <AndamiajeTab data={sesion.explicacion_andamiaje} />
             )}
 
-            {activeTab === 'juegos' && (
-              <div className="space-y-4">
-                <div className="flex flex-wrap gap-2">
-                  {GAME_OPTIONS.map((opt) => (
-                    <button
-                      key={opt.tipo}
-                      type="button"
-                      onClick={() => setSelectedGame(opt.tipo)}
-                      className={`rounded-xl px-4 py-2.5 text-sm font-bold ${
-                        selectedGame === opt.tipo
-                          ? 'bg-indigo-600 text-white shadow-xs'
-                          : 'bg-white text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50'
-                      }`}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
-                </div>
+            {activeTab === 'juegos' && (() => {
+              const availableTypes: TipoJuego[] = [
+                'flashcards',
+                'clasificar',
+                'trivia_reto',
+                ...(sesion.mini_apps.caza_error ? (['caza_error'] as TipoJuego[]) : []),
+                ...(sesion.mini_apps.ordenar_pasos
+                  ? (['ordenar_pasos'] as TipoJuego[])
+                  : []),
+              ];
+              const currentPayload =
+                sesion.mini_apps[selectedGame as keyof typeof sesion.mini_apps] ??
+                sesion.mini_apps.flashcards;
 
-                <GameRenderer
-                  key={selectedGame}
-                  asignatura={sesion.asignatura}
-                  titulo={sesion.mini_apps[selectedGame].titulo}
-                  payload={sesion.mini_apps[selectedGame]}
-                  mode="preview"
-                />
-              </div>
-            )}
+              return (
+                <div className="space-y-4">
+                  <div className="flex flex-wrap gap-2">
+                    {availableTypes.map((tipo) => (
+                      <button
+                        key={tipo}
+                        type="button"
+                        onClick={() => setSelectedGame(tipo)}
+                        className={`rounded-xl px-4 py-2.5 text-sm font-bold ${
+                          selectedGame === tipo
+                            ? 'bg-indigo-600 text-white shadow-xs'
+                            : 'bg-white text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50'
+                        }`}
+                      >
+                        {GAME_LABELS[tipo]}
+                      </button>
+                    ))}
+                  </div>
+
+                  {currentPayload && (
+                    <GameRenderer
+                      key={selectedGame}
+                      asignatura={sesion.asignatura}
+                      titulo={currentPayload.titulo}
+                      payload={currentPayload}
+                      mode="preview"
+                    />
+                  )}
+                </div>
+              );
+            })()}
           </>
         )}
       </div>

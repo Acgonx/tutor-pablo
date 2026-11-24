@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { CheckCircle2, Sparkles, Undo2, XCircle } from 'lucide-react';
-import type { FalloEnPartida } from '../../types/firestore';
+import type { FalloEnPartida, InteraccionPartida } from '../../types/firestore';
 import type { ClasificarPayload, GameCompletionResult } from '../../types/studyMaterial';
 
 interface ClasificarGameProps {
@@ -48,17 +48,30 @@ export function ClasificarGame({ payload, onComplete }: ClasificarGameProps) {
   function handleFinish() {
     let aciertos = 0;
     const fallos: FalloEnPartida[] = [];
+    const interacciones: InteraccionPartida[] = [];
 
     for (const el of elementos) {
       const chosenCatId = placements[el.id];
-      if (chosenCatId === el.categoria_correcta_id) {
+      const chosenName = categoryNameById.get(chosenCatId) ?? 'Sin clasificar';
+      const correctName = categoryNameById.get(el.categoria_correcta_id) ?? '';
+      const isOk = chosenCatId === el.categoria_correcta_id;
+
+      interacciones.push({
+        item: el.texto,
+        respuesta_alumno: chosenName,
+        respuesta_correcta: correctName,
+        correcto: isOk,
+        explicacion: el.explicacion,
+      });
+
+      if (isOk) {
         aciertos += 1;
       } else {
         fallos.push({
           concepto: el.texto,
           detalle: el.explicacion,
-          respuesta_alumno: categoryNameById.get(chosenCatId) ?? 'Sin clasificar',
-          respuesta_correcta: categoryNameById.get(el.categoria_correcta_id) ?? '',
+          respuesta_alumno: chosenName,
+          respuesta_correcta: correctName,
         });
       }
     }
@@ -69,6 +82,7 @@ export function ClasificarGame({ payload, onComplete }: ClasificarGameProps) {
       aciertos,
       total: elementos.length,
       fallos,
+      interacciones,
     });
   }
 
