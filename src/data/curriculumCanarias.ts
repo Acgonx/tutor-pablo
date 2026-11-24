@@ -178,6 +178,11 @@ export const FUENTES_DOCUMENTO: ReadonlyArray<{
     descripcion: 'Páginas del libro de texto, actividades resueltas o deberes.',
   },
   {
+    value: 'indice_temario',
+    label: 'Índice del libro / Temario',
+    descripcion: 'Foto o texto con el índice de apartados para elegir qué practicar hoy.',
+  },
+  {
     value: 'mixto',
     label: 'Material mixto',
     descripcion: 'Combinación de apuntes, ejercicios y correcciones en la misma sesión.',

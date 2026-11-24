@@ -1,12 +1,14 @@
 import { isFirebaseConfigured } from '../lib/firebase';
 import {
   analyzeImagesOcr,
+  analyzeTextIndexOrTopic,
   generateAndamiaje,
   generateEsquemaVisual,
   generateSingleEvaluationDoc,
   generateSingleMiniApp,
   iterateStudyPack,
 } from '../lib/gemini';
+import type { RawOcrResponse } from '../lib/gemini';
 import {
   createArtefacto,
   updateArtefactoEvaluationDoc,
@@ -36,23 +38,21 @@ function createDraftId(index: number): string {
   return `err_${Date.now()}_${index}`;
 }
 
-/**
- * Paso 1 del flujo: Gemini Vision transcribe fotos/PDFs, propone compleción curricular
- * acorde al Decreto 30/2023 y detecta posibles errores dejando su origen como 'pendiente_confirmar'.
- */
-export async function runStep1OcrAnalysis(params: {
-  asignatura: string;
-  fuente: FuenteDocumento;
-  images: UploadedImageItem[];
-  extraPrompt?: string;
-}): Promise<OcrVerificationData> {
-  const ocrResult = await analyzeImagesOcr(params);
+function mapRawOcrToVerification(
+  ocrResult: RawOcrResponse,
+  params: { asignatura: string; fuente: FuenteDocumento; extraPrompt?: string },
+): OcrVerificationData {
+  const epigrafes = Array.isArray(ocrResult.epigrafes_indice)
+    ? ocrResult.epigrafes_indice.map((e) => e.trim()).filter(Boolean)
+    : [];
 
   return {
     asignatura: params.asignatura,
     tema: ocrResult.tema.trim() || 'Tema sin título',
     fuente: params.fuente,
     transcripcion: ocrResult.transcripcion.trim(),
+    epigrafes_indice: epigrafes,
+    epigrafes_seleccionados: [],
     contenido_curricular_completado:
       ocrResult.contenido_curricular_completado.trim(),
     incluir_completado_curricular: Boolean(
@@ -71,6 +71,34 @@ export async function runStep1OcrAnalysis(params: {
       guardar_en_libreta: true,
     })),
   };
+}
+
+/**
+ * Paso 1 del flujo: Gemini Vision transcribe fotos/PDFs (apuntes, examen o foto de índice),
+ * propone compleción curricular acorde al Decreto 30/2023 y detecta posibles errores.
+ */
+export async function runStep1OcrAnalysis(params: {
+  asignatura: string;
+  fuente: FuenteDocumento;
+  images: UploadedImageItem[];
+  extraPrompt?: string;
+}): Promise<OcrVerificationData> {
+  const ocrResult = await analyzeImagesOcr(params);
+  return mapRawOcrToVerification(ocrResult, params);
+}
+
+/**
+ * Paso 1 alternativo sin foto: el adulto teclea/pega un índice o tema y Gemini lo
+ * estructura en epígrafes elegibles + compleción curricular LOMLOE Canarias.
+ */
+export async function runStep1TextIndexAnalysis(params: {
+  asignatura: string;
+  fuente: FuenteDocumento;
+  rawText: string;
+  extraPrompt?: string;
+}): Promise<OcrVerificationData> {
+  const ocrResult = await analyzeTextIndexOrTopic(params);
+  return mapRawOcrToVerification(ocrResult, params);
 }
 
 export interface InitializeArtifactResult {

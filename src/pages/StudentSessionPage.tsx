@@ -23,6 +23,7 @@ const GAME_LABELS: Record<TipoJuego, string> = {
   clasificar: 'Clasificar',
   trivia_reto: 'Trivia Reto',
   caza_error: '¡Caza al Error!',
+  html5_neon: 'Neon Arcade HTML5',
   ordenar_pasos: 'Ordenar Pasos',
 };
 
@@ -89,9 +90,14 @@ export function StudentSessionPage() {
   }, [id]);
 
   const availableGames: TipoJuego[] = sesion
-    ? (['flashcards', 'clasificar', 'trivia_reto', 'caza_error', 'ordenar_pasos'] as TipoJuego[]).filter(
-        (k) => Boolean(sesion.mini_apps[k]),
-      )
+    ? ([
+        'flashcards',
+        'clasificar',
+        'trivia_reto',
+        'caza_error',
+        'html5_neon',
+        'ordenar_pasos',
+      ] as TipoJuego[]).filter((k) => Boolean(sesion.mini_apps[k]))
     : [];
 
   return (

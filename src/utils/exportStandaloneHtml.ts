@@ -36,6 +36,10 @@ export function buildStandaloneHtml(params: {
   titulo: string;
   payload: GamePayload;
 }): string {
+  if (params.payload.tipo_juego === 'html5_neon') {
+    return params.payload.html_completo;
+  }
+
   const safeData = escapeJsonForInlineScript({
     asignatura: params.asignatura,
     titulo: params.titulo,

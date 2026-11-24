@@ -2,6 +2,7 @@ export type FuenteDocumento =
   | 'apuntes_clase'
   | 'examen_corregido'
   | 'libro_ejercicios'
+  | 'indice_temario'
   | 'mixto';
 
 export interface UploadedImageItem {
@@ -35,6 +36,8 @@ export interface OcrVerificationData {
   tema: string;
   fuente: FuenteDocumento;
   transcripcion: string;
+  epigrafes_indice?: string[];
+  epigrafes_seleccionados?: string[];
   contenido_curricular_completado: string;
   incluir_completado_curricular: boolean;
   criterios_evaluacion_lomloe: string[];

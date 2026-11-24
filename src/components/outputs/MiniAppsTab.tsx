@@ -41,11 +41,12 @@ interface MiniAppsTabProps {
 }
 
 const MINI_APP_TABS: ReadonlyArray<{
-  tipo: 'flashcards' | 'clasificar' | 'trivia_reto' | 'caza_error';
+  tipo: 'flashcards' | 'clasificar' | 'trivia_reto' | 'caza_error' | 'html5_neon';
   label: string;
   desc: string;
   countLabel: string;
   defaultCantidad: number;
+  isNeonWow?: boolean;
 }> = [
   {
     tipo: 'flashcards',
@@ -75,6 +76,14 @@ const MINI_APP_TABS: ReadonlyArray<{
     countLabel: 'casos de detective',
     defaultCantidad: 6,
   },
+  {
+    tipo: 'html5_neon',
+    label: '5. Neon Arcade WOW',
+    desc: 'App HTML5 neón programada a medida',
+    countLabel: 'retos o niveles en el juego',
+    defaultCantidad: 6,
+    isNeonWow: true,
+  },
 ];
 
 const GAME_TIPOLOGIAS = [
@@ -85,9 +94,22 @@ const GAME_TIPOLOGIAS = [
   'Errores típicos para cazar la trampa',
 ] as const;
 
+const NEON_TIPOLOGIAS = [
+  'Misión Arcade Neón (vidas, combo y racha)',
+  'Tablero interactivo táctil (pintar fracciones / geometría en SVG o Canvas)',
+  'Memory / Parejas Luminosas',
+  'Recta numérica o coordenadas láser',
+  'Duelo contrarreloj con feedback paso a paso',
+] as const;
+
 const GAME_SUGGESTIONS = [
   'Pon preguntas visuales donde tenga que identificar la fracción dibujada en el círculo o barra.',
   'Hazlo ágil y divertido con operaciones rápidas y errores típicos de signos.',
+] as const;
+
+const NEON_SUGGESTIONS = [
+  'Crea un juego neón donde Pablo pinte sectores de círculos/barras para construir la fracción pedida.',
+  'Haz una misión espacial cyberpunk con combos, partículas de neón y cálculo rápido.',
 ] as const;
 
 function PrintableMiniAppSheet({
@@ -266,6 +288,28 @@ function PrintableMiniAppSheet({
           ))}
         </ol>
       )}
+
+      {payload.tipo_juego === 'html5_neon' && (
+        <div className="print-avoid-break space-y-3 rounded-xl border border-slate-300 bg-slate-50 p-4 text-sm">
+          <p className="font-bold text-slate-900">
+            Mini-App Interactiva HTML5 Neón: {payload.estilo_mecanica}
+          </p>
+          <p className="text-xs text-slate-600">
+            Esta actividad es un juego visual interactivo tipo arcade diseñado para iPad o
+            navegador. Al jugarla en pantalla podrás imprimir el informe PDF con las respuestas
+            y puntuaciones de Pablo, o descargar el archivo <code>.html</code> autocontenido.
+          </p>
+          {payload.conceptos_clave.length > 0 && (
+            <ul className="list-disc space-y-1 pl-5 text-xs text-slate-800">
+              {payload.conceptos_clave.map((c, idx) => (
+                <li key={idx}>
+                  <MathText text={c} />
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
     </article>
   );
 }
@@ -281,7 +325,7 @@ export function MiniAppsTab({
   onRetoPublished,
 }: MiniAppsTabProps) {
   const [selectedTipo, setSelectedTipo] = useState<
-    'flashcards' | 'clasificar' | 'trivia_reto' | 'caza_error'
+    'flashcards' | 'clasificar' | 'trivia_reto' | 'caza_error' | 'html5_neon'
   >('flashcards');
   const [publishedLinks, setPublishedLinks] = useState<Partial<Record<TipoJuego, string>>>({});
   const [copiedTipo, setCopiedTipo] = useState<TipoJuego | null>(null);
@@ -347,10 +391,16 @@ export function MiniAppsTab({
 
   return (
     <div className="space-y-5">
-      <div className="no-print grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="no-print grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-5">
         {MINI_APP_TABS.map((tab) => {
           const isActive = selectedTipo === tab.tipo;
           const isReady = Boolean(miniApps[tab.tipo]);
+          const activeClass = tab.isNeonWow
+            ? 'border-cyan-400 bg-slate-950 text-cyan-200 shadow-[0_0_20px_rgba(34,211,238,0.28)]'
+            : 'border-indigo-600 bg-indigo-600 text-white shadow-sm';
+          const inactiveClass = tab.isNeonWow
+            ? 'border-cyan-300 bg-gradient-to-br from-slate-900 to-indigo-950 text-cyan-100 hover:border-cyan-400'
+            : 'border-slate-200 bg-white text-slate-800 hover:border-indigo-300';
           return (
             <button
               key={tab.tipo}
@@ -360,22 +410,26 @@ export function MiniAppsTab({
                 setActionError(null);
               }}
               className={`rounded-2xl border p-3.5 text-left transition-all ${
-                isActive
-                  ? 'border-indigo-600 bg-indigo-600 text-white shadow-sm'
-                  : 'border-slate-200 bg-white text-slate-800 hover:border-indigo-300'
+                isActive ? activeClass : inactiveClass
               }`}
             >
               <div className="flex items-center justify-between gap-2">
                 <p className="text-sm font-bold">{tab.label}</p>
                 {isReady && (
                   <CheckCircle2
-                    className={`h-4 w-4 ${isActive ? 'text-emerald-200' : 'text-emerald-600'}`}
+                    className={`h-4 w-4 ${
+                      isActive || tab.isNeonWow ? 'text-emerald-300' : 'text-emerald-600'
+                    }`}
                   />
                 )}
               </div>
               <p
                 className={`mt-0.5 text-xs ${
-                  isActive ? 'text-indigo-100' : 'text-slate-500'
+                  tab.isNeonWow
+                    ? 'text-cyan-200/80'
+                    : isActive
+                      ? 'text-indigo-100'
+                      : 'text-slate-500'
                 }`}
               >
                 {isReady ? `${tab.desc} · Lista` : `${tab.desc} · Sin generar`}
@@ -389,11 +443,15 @@ export function MiniAppsTab({
         <GeminiPromptBox
           key={`${selectedTipo}_prompt`}
           title={`Configurar ${activeMeta.label}`}
-          subtitle="Elige cuántos ítems quieres en el juego, si incluyes LaTeX/figuras visuales y el enfoque."
+          subtitle={
+            selectedTipo === 'html5_neon'
+              ? 'Elige el número de retos, la mecánica arcade/Canvas que quieres que programe Gemini en HTML5 Neón y cualquier detalle visual.'
+              : 'Elige cuántos ítems quieres en el juego, si incluyes LaTeX/figuras visuales y el enfoque.'
+          }
           countLabel={activeMeta.countLabel}
           defaultCantidad={activeMeta.defaultCantidad}
-          tipologiaOptions={GAME_TIPOLOGIAS}
-          quickSuggestions={GAME_SUGGESTIONS}
+          tipologiaOptions={selectedTipo === 'html5_neon' ? NEON_TIPOLOGIAS : GAME_TIPOLOGIAS}
+          quickSuggestions={selectedTipo === 'html5_neon' ? NEON_SUGGESTIONS : GAME_SUGGESTIONS}
           defaultDificultad={defaultDificultad}
           hasExistingContent={Boolean(currentPayload)}
           isGenerating={isGeneratingThis}

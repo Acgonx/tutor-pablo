@@ -9,6 +9,7 @@ import {
   Gamepad2,
   GitBranch,
   Layers,
+  ListChecks,
   Loader2,
   PlusCircle,
   Share2,
@@ -69,6 +70,7 @@ interface OutputTabsProps {
     targetDificultad: NivelDificultad,
     instruccionCambio: string,
   ) => Promise<void>;
+  onUpdateVerification?: (next: OcrVerificationData) => Promise<void> | void;
   onSesionAttached: (sesionId: string) => void;
   onBackToVerification: () => void;
   onStartNewSession: () => void;
@@ -111,6 +113,7 @@ const QUICK_PROMPTS: readonly string[] = [
 
 export function OutputTabs({
   studyPack,
+  verification,
   artefacto,
   dificultad,
   injectedErrors,
@@ -132,6 +135,7 @@ export function OutputTabs({
   onGenerateEvaluationDoc,
   onGenerateMiniApp,
   onIterateArtifact,
+  onUpdateVerification,
   onSesionAttached,
   onBackToVerification,
   onStartNewSession,
@@ -289,6 +293,62 @@ export function OutputTabs({
             </button>
           </div>
         </div>
+
+        {verification.epigrafes_indice && verification.epigrafes_indice.length > 0 && (
+          <div className="mt-4 rounded-xl border border-indigo-200 bg-indigo-50/40 p-3.5">
+            <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+              <span className="inline-flex items-center gap-1.5 font-bold text-indigo-950">
+                <ListChecks className="h-4 w-4 text-indigo-600" />
+                Apartados del índice (elige qué practicar al generar/regenerar cada pestaña):
+              </span>
+              {onUpdateVerification && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    void onUpdateVerification({
+                      ...verification,
+                      epigrafes_seleccionados: [],
+                    })
+                  }
+                  className="font-semibold text-indigo-700 hover:underline"
+                >
+                  Restablecer (todo el tema)
+                </button>
+              )}
+            </div>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {verification.epigrafes_indice.map((ep, idx) => {
+                const selected = (verification.epigrafes_seleccionados ?? []).includes(ep);
+                return (
+                  <button
+                    key={`${ep}_${idx}`}
+                    type="button"
+                    disabled={!onUpdateVerification}
+                    onClick={() => {
+                      if (!onUpdateVerification) return;
+                      const current = verification.epigrafes_seleccionados ?? [];
+                      const next = selected
+                        ? current.filter((item) => item !== ep)
+                        : [...current, ep];
+                      void onUpdateVerification({
+                        ...verification,
+                        epigrafes_seleccionados: next,
+                      });
+                    }}
+                    className={`rounded-lg border px-2.5 py-1 text-xs font-semibold transition-all ${
+                      selected
+                        ? 'border-indigo-600 bg-indigo-600 text-white shadow-xs'
+                        : 'border-indigo-200 bg-white text-slate-700 hover:border-indigo-400'
+                    }`}
+                  >
+                    {selected ? '✓ ' : '+ '}
+                    {ep}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {showIteratePanel && (
           <div className="mt-4 space-y-3 rounded-2xl border border-indigo-200 bg-indigo-50/50 p-4">

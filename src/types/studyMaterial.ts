@@ -259,11 +259,21 @@ export interface OrdenarPasosPayload {
   secuencias: SecuenciaOrdenar[];
 }
 
+export interface NeonHtmlPayload {
+  tipo_juego: 'html5_neon';
+  titulo: string;
+  instrucciones: string;
+  estilo_mecanica: string;
+  conceptos_clave: string[];
+  html_completo: string;
+}
+
 export type GamePayload =
   | FlashcardsPayload
   | ClasificarPayload
   | TriviaRetoPayload
   | CazaErrorPayload
+  | NeonHtmlPayload
   | OrdenarPasosPayload;
 
 export interface MiniAppsBundle {
@@ -271,6 +281,7 @@ export interface MiniAppsBundle {
   clasificar?: ClasificarPayload;
   trivia_reto?: TriviaRetoPayload;
   caza_error?: CazaErrorPayload;
+  html5_neon?: NeonHtmlPayload;
   ordenar_pasos?: OrdenarPasosPayload;
 }
 

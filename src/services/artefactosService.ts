@@ -120,6 +120,12 @@ function hydrateVerification(raw: Record<string, unknown>): OcrVerificationData 
       ? raw.fuente
       : 'apuntes_clase') as OcrVerificationData['fuente'],
     transcripcion: typeof raw.transcripcion === 'string' ? raw.transcripcion : '',
+    epigrafes_indice: Array.isArray(raw.epigrafes_indice)
+      ? raw.epigrafes_indice.filter((x): x is string => typeof x === 'string')
+      : [],
+    epigrafes_seleccionados: Array.isArray(raw.epigrafes_seleccionados)
+      ? raw.epigrafes_seleccionados.filter((x): x is string => typeof x === 'string')
+      : [],
     contenido_curricular_completado:
       typeof raw.contenido_curricular_completado === 'string'
         ? raw.contenido_curricular_completado
@@ -339,6 +345,28 @@ export async function updateArtefactoStudyPack(params: {
   return {
     ...params.artefacto,
     study_pack: params.nextStudyPack,
+    updated_at: isoNow,
+  };
+}
+
+export async function updateArtefactoVerification(params: {
+  artefacto: ArtefactoDoc;
+  nextVerification: OcrVerificationData;
+}): Promise<ArtefactoDoc> {
+  const db = requireDb();
+  const now = Timestamp.now();
+  const isoNow = now.toDate().toISOString();
+
+  await updateDoc(doc(db, COLLECTIONS.ARTEFACTOS, params.artefacto.id), {
+    tema: params.nextVerification.tema,
+    verification_json: JSON.stringify(params.nextVerification),
+    updated_at: now,
+  });
+
+  return {
+    ...params.artefacto,
+    tema: params.nextVerification.tema,
+    verification: params.nextVerification,
     updated_at: isoNow,
   };
 }

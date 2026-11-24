@@ -14,6 +14,7 @@ import { MathText } from '../common/MathText';
 import { CazaErrorGame } from './CazaErrorGame';
 import { ClasificarGame } from './ClasificarGame';
 import { FlashcardsGame } from './FlashcardsGame';
+import { NeonHtmlGame } from './NeonHtmlGame';
 import { OrdenarPasosGame } from './OrdenarPasosGame';
 import { TriviaRetoGame } from './TriviaRetoGame';
 
@@ -22,6 +23,7 @@ const GAME_LABELS: Record<TipoJuego, string> = {
   clasificar: 'Clasificar · Tap to Place',
   trivia_reto: 'Trivia Reto',
   caza_error: '¡Caza al Error! · Detective',
+  html5_neon: 'HTML5 Neón Arcade · WOW',
   ordenar_pasos: 'Ordenar Pasos',
 };
 
@@ -105,6 +107,13 @@ export function GameRenderer({
           {payload.tipo_juego === 'caza_error' && (
             <CazaErrorGame
               key={`ce_${playKey}`}
+              payload={payload}
+              onComplete={handleGameComplete}
+            />
+          )}
+          {payload.tipo_juego === 'html5_neon' && (
+            <NeonHtmlGame
+              key={`neon_${playKey}`}
               payload={payload}
               onComplete={handleGameComplete}
             />

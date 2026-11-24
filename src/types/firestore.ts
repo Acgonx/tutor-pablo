@@ -7,6 +7,7 @@ export type TipoJuego =
   | 'clasificar'
   | 'trivia_reto'
   | 'caza_error'
+  | 'html5_neon'
   | 'ordenar_pasos';
 
 export interface FalloEnPartida {

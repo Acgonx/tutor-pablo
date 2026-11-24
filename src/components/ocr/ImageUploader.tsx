@@ -5,6 +5,7 @@ import {
   Camera,
   FileText,
   ImagePlus,
+  ListChecks,
   Loader2,
   Sparkles,
   Trash2,
@@ -36,6 +37,7 @@ interface ImageUploaderProps {
   isAnalyzingOcr: boolean;
   errorMessage: string | null;
   onAnalyzeImages: () => void;
+  onAnalyzeManualTextWithGemini: () => void;
   onContinueWithManualText: () => void;
 }
 
@@ -56,6 +58,7 @@ export function ImageUploader({
   isAnalyzingOcr,
   errorMessage,
   onAnalyzeImages,
+  onAnalyzeManualTextWithGemini,
   onContinueWithManualText,
 }: ImageUploaderProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -202,10 +205,10 @@ export function ImageUploader({
             <ImagePlus className="h-6 w-6" />
           </div>
           <p className="mt-3 text-sm font-semibold text-slate-800">
-            Arrastra aquí fotos o PDFs de apuntes, fichas o exámenes corregidos
+            Arrastra aquí fotos o PDFs de apuntes, exámenes o del índice del libro
           </p>
           <p className="mt-1 text-xs text-slate-500">
-            Las fotos se optimizan automáticamente y los PDFs se leen directamente con Gemini
+            Si subes el índice del tema, podrás elegir exactamente qué apartados practicar hoy
           </p>
 
           <div className="mt-4 flex flex-wrap justify-center gap-3">
@@ -288,14 +291,14 @@ export function ImageUploader({
               htmlFor="extra-prompt"
               className="block text-sm font-semibold text-slate-700"
             >
-              Indicaciones para Gemini (opcional)
+              Qué quieres practicar hoy / indicaciones para Gemini (opcional)
             </label>
             <textarea
               id="extra-prompt"
               rows={3}
               value={extraPrompt}
               onChange={(ev) => onExtraPromptChange(ev.target.value)}
-              placeholder="Ej: Tiene examen el viernes. Insiste en la jerarquía de operaciones con signos negativos."
+              placeholder="Ej: Hoy quiero practicar el apartado 2 (fracciones equivalentes) y problemas con dibujos."
               className="mt-1.5 w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 focus:outline-none"
             />
           </div>
@@ -305,14 +308,14 @@ export function ImageUploader({
               htmlFor="manual-text"
               className="block text-sm font-semibold text-slate-700"
             >
-              O pega texto / temario directamente (opcional si no subes fotos)
+              O teclea/pega aquí el índice o tema (sin necesidad de foto)
             </label>
             <textarea
               id="manual-text"
               rows={3}
               value={manualText}
               onChange={(ev) => onManualTextChange(ev.target.value)}
-              placeholder="Pega aquí el resumen del libro, el enunciado del ejercicio o notas si no tienes foto a mano."
+              placeholder="Ej: Tema 4 Fracciones: 1. Concepto y representación. 2. Fracciones equivalentes. 3. Reducción a común denominador. 4. Operaciones."
               className="mt-1.5 w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm text-slate-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 focus:outline-none"
             />
           </div>
@@ -326,15 +329,38 @@ export function ImageUploader({
 
         <div className="mt-6 flex flex-wrap items-center justify-end gap-3">
           {manualText.trim().length > 0 && (
-            <button
-              type="button"
-              disabled={isAnalyzingOcr}
-              onClick={onContinueWithManualText}
-              className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-            >
-              <FileText className="h-4 w-4" />
-              Revisar texto manual sin OCR
-            </button>
+            <>
+              <button
+                type="button"
+                disabled={isAnalyzingOcr}
+                onClick={onContinueWithManualText}
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              >
+                <FileText className="h-4 w-4" />
+                Edición rápida sin IA
+              </button>
+
+              {images.length === 0 && (
+                <button
+                  type="button"
+                  disabled={isAnalyzingOcr || !isGeminiConfigured}
+                  onClick={onAnalyzeManualTextWithGemini}
+                  className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white shadow-sm hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+                >
+                  {isAnalyzingOcr ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Estructurando índice con Gemini...
+                    </>
+                  ) : (
+                    <>
+                      <ListChecks className="h-4 w-4" />
+                      Analizar índice / texto y elegir qué practicar
+                    </>
+                  )}
+                </button>
+              )}
+            </>
           )}
 
           <button

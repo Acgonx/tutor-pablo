@@ -20,6 +20,7 @@ import type {
   GeneratedStudyPack,
   GenerationPromptConfig,
   MiniAppsBundle,
+  NeonHtmlPayload,
   NivelDificultad,
   TipoDocumentoEvaluacion,
   TriviaRetoPayload,
@@ -90,6 +91,7 @@ function parseJsonResponse<T>(rawText: string | undefined): T {
 export interface RawOcrResponse {
   tema: string;
   transcripcion: string;
+  epigrafes_indice: string[];
   contenido_curricular_completado: string;
   criterios_evaluacion_lomloe: string[];
   observaciones_legibilidad: string;
@@ -105,6 +107,12 @@ const ocrResponseSchema: Schema = {
   properties: {
     tema: { type: Type.STRING },
     transcripcion: { type: Type.STRING },
+    epigrafes_indice: {
+      type: Type.ARRAY,
+      description:
+        'Lista ordenada de unidades, epígrafes o apartados detectados en el índice o en los apuntes para poder elegir cuáles practicar.',
+      items: { type: Type.STRING },
+    },
     contenido_curricular_completado: { type: Type.STRING },
     criterios_evaluacion_lomloe: { type: Type.ARRAY, items: { type: Type.STRING } },
     observaciones_legibilidad: { type: Type.STRING },
@@ -128,6 +136,7 @@ const ocrResponseSchema: Schema = {
   required: [
     'tema',
     'transcripcion',
+    'epigrafes_indice',
     'contenido_curricular_completado',
     'criterios_evaluacion_lomloe',
     'observaciones_legibilidad',
@@ -515,6 +524,33 @@ const cazaErrorSchema: Schema = {
   required: ['tipo_juego', 'titulo', 'instrucciones', 'casos'],
 };
 
+const neonHtmlSchema: Schema = {
+  type: Type.OBJECT,
+  properties: {
+    tipo_juego: { type: Type.STRING, format: 'enum', enum: ['html5_neon'] },
+    titulo: { type: Type.STRING },
+    instrucciones: { type: Type.STRING },
+    estilo_mecanica: {
+      type: Type.STRING,
+      description: 'Nombre breve del género visual/arcade implementado (ej. Pintor Neón en Canvas, Misión Escudos, Memory Cyber).',
+    },
+    conceptos_clave: { type: Type.ARRAY, items: { type: Type.STRING } },
+    html_completo: {
+      type: Type.STRING,
+      description:
+        'Documento HTML5 autocontenido completo (<!DOCTYPE html><html>...</html>) con CSS neón oscuro y JavaScript interactivo sin librerías externas obligatorias.',
+    },
+  },
+  required: [
+    'tipo_juego',
+    'titulo',
+    'instrucciones',
+    'estilo_mecanica',
+    'conceptos_clave',
+    'html_completo',
+  ],
+};
+
 const DIFICULTAD_GUIDANCE: Record<NivelDificultad, string> = {
   refuerzo:
     'NIVEL REFUERZO GUIADO: pasos muy pequeños, lenguaje muy cercano y consolidación de base.',
@@ -598,6 +634,21 @@ function sanitizeGamePayload(payload: GamePayload): GamePayload {
       };
       return normalized;
     }
+    case 'html5_neon': {
+      let html = payload.html_completo.trim();
+      if (html.startsWith('```')) {
+        html = html.replace(/^```(?:html)?\s*/i, '').replace(/\s*```$/, '').trim();
+      }
+      const normalized: NeonHtmlPayload = {
+        ...payload,
+        tipo_juego: 'html5_neon',
+        conceptos_clave: Array.isArray(payload.conceptos_clave)
+          ? payload.conceptos_clave
+          : [],
+        html_completo: html,
+      };
+      return normalized;
+    }
     case 'ordenar_pasos':
       return payload;
   }
@@ -656,6 +707,27 @@ Enfoque curricular Canarias: ${materia.enfoqueDecreto30}`
           .join('\n')
       : 'El docente no ha invocado errores previos de otros artefactos para esta sesión.';
 
+  const selectedEpigrafes = (verification.epigrafes_seleccionados ?? []).filter((e) =>
+    e.trim(),
+  );
+  const allEpigrafes = (verification.epigrafes_indice ?? []).filter((e) => e.trim());
+
+  const focoIndiceBlock =
+    selectedEpigrafes.length > 0
+      ? `=== APARTADOS ELEGIDOS DEL ÍNDICE PARA PRACTICAR HOY (FOCO PRIORITARIO) ===
+${selectedEpigrafes.map((e, i) => `${i + 1}. ${e}`).join('\n')}
+IMPORTANTE: Centra las actividades, ejemplos y ejercicios específicamente en estos apartados elegidos.${
+          allEpigrafes.length > selectedEpigrafes.length
+            ? `\n(Índice completo del tema como contexto: ${allEpigrafes.join(' | ')})`
+            : ''
+        }
+`
+      : allEpigrafes.length > 0
+        ? `=== APARTADOS DEL ÍNDICE / TEMARIO ===
+${allEpigrafes.map((e, i) => `${i + 1}. ${e}`).join('\n')}
+`
+        : '';
+
   return `${curriculumBlock}
 Tema actual: ${verification.tema}
 Tipo de material analizado: ${verification.fuente}
@@ -663,7 +735,7 @@ Tipo de material analizado: ${verification.fuente}
 === CRITERIOS / SABERES LOMLOE DEL TEMA ===
 ${criteriosText}
 
-=== CONTENIDO VERIFICADO POR EL DOCENTE ===
+${focoIndiceBlock}=== CONTENIDO VERIFICADO POR EL DOCENTE ===
 ${verification.transcripcion}
 
 ${
@@ -725,16 +797,25 @@ export async function analyzeImagesOcr(params: {
     },
   }));
 
+  const isIndice = params.fuente === 'indice_temario';
   const promptText = `Analiza cuidadosamente estos documentos (fotos o PDFs) de 1º de ESO en Canarias (Decreto 30/2023).
 Asignatura seleccionada: ${params.asignatura}
 Tipo de documento: ${params.fuente}
-${params.extraPrompt?.trim() ? `Indicaciones del adulto: ${params.extraPrompt.trim()}` : ''}
+${params.extraPrompt?.trim() ? `Indicaciones del adulto / qué quiere practicar hoy: ${params.extraPrompt.trim()}` : ''}
 
 Tareas del Paso 1:
 1. Identifica el tema concreto de la materia.
-2. Transcribe fielmente todo el contenido visible (usa LaTeX $...$ para expresiones matemáticas si hay fórmulas).
-3. COMPLECIÓN CURRICULAR (1º ESO Canarias, Decreto 30/2023): detecta qué saberes básicos o explicaciones clave del tema faltan o están incompletos y redáctalos en "contenido_curricular_completado". Añade en "criterios_evaluacion_lomloe" los criterios oficiales vinculados.
-4. DETECCIÓN DE ERRORES: extrae cualquier fallo, tachón o ejercicio erróneo visible en "errores_detectados". El adulto confirmará luego si cada fallo es de Pablo o del propio material.
+2. ${
+    isIndice
+      ? 'Transcripción estructurada del ÍNDICE: transcribe todas las unidades, bloques o epígrafes visibles en "transcripcion" y extrae cada apartado limpio en el array "epigrafes_indice" para que el adulto pueda marcar exactamente qué practicar hoy.'
+      : 'Transcribe fielmente todo el contenido visible (usa LaTeX $...$ para expresiones matemáticas si hay fórmulas) y enumera en "epigrafes_indice" los subapartados o bloques conceptuales principales detectados (o del índice si aparece uno).'
+  }
+3. COMPLECIÓN CURRICULAR (1º ESO Canarias, Decreto 30/2023): detecta qué saberes básicos o explicaciones clave del tema faltan o están incompletos respecto al currículo oficial y redáctalos de forma didáctica en "contenido_curricular_completado". Añade en "criterios_evaluacion_lomloe" los criterios oficiales vinculados.
+4. DETECCIÓN DE ERRORES: ${
+    isIndice
+      ? 'Al ser un índice o temario, deja "errores_detectados" vacío salvo que haya anotaciones o fallos visibles.'
+      : 'extrae cualquier fallo, tachón o ejercicio erróneo visible en "errores_detectados". El adulto confirmará luego si cada fallo es de Pablo o del propio material.'
+  }
 5. En "observaciones_legibilidad", señala zonas borrosas o dudas de lectura.`;
 
   const response = await ai.models.generateContent({
@@ -745,6 +826,50 @@ Tareas del Paso 1:
       responseMimeType: 'application/json',
       responseSchema: ocrResponseSchema,
       temperature: 0.2,
+    },
+  });
+
+  return parseJsonResponse<RawOcrResponse>(response.text);
+}
+
+/**
+ * Analiza un índice tecleado/pegado o una petición directa de tema sin necesidad de subir foto.
+ */
+export async function analyzeTextIndexOrTopic(params: {
+  asignatura: string;
+  fuente: FuenteDocumento;
+  rawText: string;
+  extraPrompt?: string;
+}): Promise<RawOcrResponse> {
+  if (!params.rawText.trim()) {
+    throw new Error('Escribe o pega el índice o tema que quieres preparar.');
+  }
+
+  const ai = getGenAIClient();
+  const promptText = `El docente o padre ha tecleado/pegado el siguiente índice, temario o petición de estudio para 1º de ESO en Canarias (Decreto 30/2023).
+Asignatura seleccionada: ${params.asignatura}
+Tipo de entrada: ${params.fuente}
+Texto / índice introducido:
+"""
+${params.rawText.trim()}
+"""
+${params.extraPrompt?.trim() ? `Qué quiere practicar o indicaciones extra: ${params.extraPrompt.trim()}` : ''}
+
+Tareas:
+1. Deduce el título limpio del tema en "tema".
+2. Organiza y amplía brevemente el contenido base del tema en "transcripcion" (usando LaTeX $...$ si es matemáticas) para que sirva de material de partida.
+3. Extrae en "epigrafes_indice" la lista clara y ordenada de los apartados/epígrafes del índice (si solo escribió un tema corto como "Fracciones equivalentes", desglósalo en 4-6 apartados didácticos del tema para 1º ESO para que el adulto elija qué practicar hoy).
+4. En "contenido_curricular_completado", completa los saberes básicos oficiales del Decreto 30/2023 (Canarias) para 1º ESO relacionados con esos apartados, y añade los "criterios_evaluacion_lomloe".
+5. Deja "errores_detectados" vacío y "observaciones_legibilidad" vacío (o indica si algún apartado es muy amplio).`;
+
+  const response = await ai.models.generateContent({
+    model: GEMINI_MODEL,
+    contents: [{ text: promptText }],
+    config: {
+      systemInstruction: `${CUSTOM_PEDAGOGICAL_SKILL}\n\nEres especialista en programación didáctica LOMLOE Canarias (1º ESO).`,
+      responseMimeType: 'application/json',
+      responseSchema: ocrResponseSchema,
+      temperature: 0.25,
     },
   });
 
@@ -864,6 +989,54 @@ export async function generateSingleMiniApp(params: {
 
   const effectiveTipo =
     params.tipoJuego === 'ordenar_pasos' ? 'caza_error' : params.tipoJuego;
+
+  if (effectiveTipo === 'html5_neon') {
+    const prompt = `Programa una **Mini-App HTML5 tipo WOW con estética NEÓN CYBER-ARCADE** completamente autocontenida en un único archivo HTML5 ("html_completo") con exactamente ${params.config.cantidad} retos/fases/ejercicios para Pablo (1º de ESO Canarias, 12 años).
+
+${cfg}
+
+REQUISITOS DE DISEÑO Y PROGRAMACIÓN DE "html_completo":
+1. Documento único válido \`<!DOCTYPE html><html lang="es">...</html>\` con \`<style>\` y \`<script>\` embebidos (100% funcional offline sin depender de CDNs externos obligatorios, ideal para iframe y Safari iPad).
+2. ESTÉTICA NEÓN WOW: fondo oscuro espacial/cyber (\`#050816\` con rejilla o brillo radial sutil), tarjetas translúcidas glassmorphism, bordes y botones neón (\`#22d3ee\` cian, \`#e879f9\` magenta, \`#4ade80\` verde neón, \`#facc15\` dorado), tipografía clara legible (\`system-ui, sans-serif\`), barra de progreso animada, contador de combo/racha, botón visible de silencio/sonido con efectos sutiles en Web Audio API (activados solo tras clic del alumno).
+3. MECÁNICA REALMENTE JUGABLE Y DIVERTIDA (NO un formulario aburrido):
+   - Adapta la mecánica al tema y a lo pedido por el docente (por ejemplo: pintor interactivo de fracciones en SVG/Canvas donde Pablo hace clic en porciones para colorearlas y comprueba su fracción; nave/escudo espacial con opciones o teclado táctil numérico; juego de parejas luminosas / memory; recta numérica láser interactiva; duelo contrarreloj visual).
+   - Incluye SVG dinámicos o Canvas nítidos cuando el tema tenga fracciones, geometría, gráficas o diagramas.
+   - Para matemáticas, renderiza fracciones apiladas o potencias de forma impecable con HTML/CSS (\`<span class="frac"><span class="num">3</span><span class="den">4</span></span>\`, \`<sup>\`, \`×\`, \`÷\`, \`√\`, \`π\`), nunca dejes símbolos LaTeX crudos \`$...$\` sin formatear en pantalla.
+4. FEEDBACK INMEDIATO PEDAGÓGICO: tras cada respuesta, explica brevemente *por qué* es correcta o el truco para corregir el fallo antes de pasar al siguiente reto.
+5. PANTALLA FINAL + TELEMETRÍA OBLIGATORIA PARA TUTOR PABLO:
+   - Al terminar los ${params.config.cantidad} retos, muestra una pantalla final luminosa con puntuación (%), racha máxima, resumen de aciertos/fallos y botón "Volver a jugar".
+   - Justo al completarse la partida, ejecuta OBLIGATORIAMENTE este envío al padre:
+     \`\`\`js
+     if (window.parent && window.parent !== window) {
+       window.parent.postMessage({
+         source: 'tutor-pablo-neon',
+         completed: true,
+         puntuacion: Math.round((aciertos / total) * 100),
+         aciertos: aciertos,
+         total: total,
+         fallos: fallosArray, // [{ concepto, detalle, respuesta_alumno, respuesta_correcta }]
+         interacciones: interaccionesArray // [{ item, respuesta_alumno, respuesta_correcta, correcto, explicacion }]
+       }, '*');
+     }
+     \`\`\`
+6. IMPORTANTE: Asegúrate de que TODO el JavaScript sea sintácticamente válido, sin errores, táctil (botones >= 44px para iPad) y no uses \`alert()\` ni \`prompt()\`.
+
+${context}`;
+
+    const response = await ai.models.generateContent({
+      model: GEMINI_MODEL,
+      contents: [{ text: prompt }],
+      config: {
+        systemInstruction: `${CUSTOM_PEDAGOGICAL_SKILL}\n\nEres un experto ingeniero creativo de videojuegos educativos HTML5/CSS3/Canvas con estética neón para adolescentes de 12 años (1º ESO).`,
+        responseMimeType: 'application/json',
+        responseSchema: neonHtmlSchema,
+        temperature: 0.65,
+      },
+    });
+
+    const parsed = parseJsonResponse<GamePayload>(response.text);
+    return sanitizeGamePayload(parsed);
+  }
 
   const schemaByType: Record<
     'flashcards' | 'clasificar' | 'trivia_reto' | 'caza_error',
@@ -987,6 +1160,7 @@ export async function iterateStudyPack(params: {
     'clasificar',
     'trivia_reto',
     'caza_error',
+    'html5_neon',
   ];
 
   for (const key of gameKeys) {
@@ -1003,6 +1177,7 @@ export async function iterateStudyPack(params: {
           else if (res.tipo_juego === 'clasificar') nextPack.mini_apps.clasificar = res;
           else if (res.tipo_juego === 'trivia_reto') nextPack.mini_apps.trivia_reto = res;
           else if (res.tipo_juego === 'caza_error') nextPack.mini_apps.caza_error = res;
+          else if (res.tipo_juego === 'html5_neon') nextPack.mini_apps.html5_neon = res;
         }),
       );
     }

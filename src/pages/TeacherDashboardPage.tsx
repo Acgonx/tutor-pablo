@@ -6,6 +6,7 @@ import {
   deleteArtefacto,
   getAllArtefactos,
   updateArtefactoEstado,
+  updateArtefactoVerification,
 } from '../services/artefactosService';
 import {
   deleteLibretaError,
@@ -21,6 +22,7 @@ import {
   runGenerateMiniApp,
   runIterateArtifact,
   runStep1OcrAnalysis,
+  runStep1TextIndexAnalysis,
 } from '../services/pedagogicalEngine';
 import { deleteRetoPablo, getAllRetosPablo } from '../services/retosService';
 import type {
@@ -284,6 +286,30 @@ export function TeacherDashboardPage() {
     }
   }
 
+  async function handleAnalyzeManualTextWithGemini() {
+    setUploadError(null);
+    setIsAnalyzingOcr(true);
+    try {
+      const result = await runStep1TextIndexAnalysis({
+        asignatura,
+        fuente,
+        rawText: manualText,
+        extraPrompt,
+      });
+      setVerification(result);
+      setGenerateError(null);
+      setStep('verify');
+    } catch (error) {
+      setUploadError(
+        error instanceof Error
+          ? error.message
+          : 'No se pudo estructurar el índice o tema con Gemini.',
+      );
+    } finally {
+      setIsAnalyzingOcr(false);
+    }
+  }
+
   function handleContinueWithManualText() {
     setUploadError(null);
     setGenerateError(null);
@@ -292,6 +318,8 @@ export function TeacherDashboardPage() {
       tema: 'Tema introducido manualmente',
       fuente,
       transcripcion: manualText.trim(),
+      epigrafes_indice: [],
+      epigrafes_seleccionados: [],
       contenido_curricular_completado: '',
       incluir_completado_curricular: false,
       criterios_evaluacion_lomloe: [],
@@ -461,6 +489,24 @@ export function TeacherDashboardPage() {
       );
     } finally {
       setGeneratingGameType(null);
+    }
+  }
+
+  async function handleUpdateVerificationFocus(nextVerification: OcrVerificationData) {
+    setVerification(nextVerification);
+    if (isFirebaseConfigured && activeArtefacto) {
+      try {
+        const updated = await updateArtefactoVerification({
+          artefacto: activeArtefacto,
+          nextVerification,
+        });
+        setActiveArtefacto(updated);
+        setArtefactosItems((prev) =>
+          prev.map((item) => (item.id === updated.id ? updated : item)),
+        );
+      } catch (error) {
+        console.error('[Dashboard] No se pudo guardar el foco del índice:', error);
+      }
     }
   }
 
@@ -689,6 +735,7 @@ export function TeacherDashboardPage() {
               isAnalyzingOcr={isAnalyzingOcr}
               errorMessage={uploadError}
               onAnalyzeImages={() => void handleAnalyzeImages()}
+              onAnalyzeManualTextWithGemini={() => void handleAnalyzeManualTextWithGemini()}
               onContinueWithManualText={handleContinueWithManualText}
             />
           )}
@@ -734,6 +781,7 @@ export function TeacherDashboardPage() {
               onGenerateEvaluationDoc={handleGenerateEvaluationDoc}
               onGenerateMiniApp={handleGenerateMiniApp}
               onIterateArtifact={handleIterateArtifact}
+              onUpdateVerification={handleUpdateVerificationFocus}
               onSesionAttached={handleSesionAttached}
               onBackToVerification={() => setStep('verify')}
               onStartNewSession={handleStartNewSession}

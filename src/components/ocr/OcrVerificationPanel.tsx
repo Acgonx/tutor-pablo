@@ -7,6 +7,7 @@ import {
   ChevronDown,
   ChevronUp,
   Eye,
+  ListChecks,
   Loader2,
   Plus,
   Sparkles,
@@ -83,6 +84,37 @@ export function OcrVerificationPanel({
 }: OcrVerificationPanelProps) {
   const [zoomedImage, setZoomedImage] = useState<UploadedImageItem | null>(null);
   const [showInvokeErrors, setShowInvokeErrors] = useState(false);
+  const [newEpigrafeText, setNewEpigrafeText] = useState('');
+
+  const epigrafesIndice = verification.epigrafes_indice ?? [];
+  const epigrafesSeleccionados = verification.epigrafes_seleccionados ?? [];
+
+  function toggleEpigrafe(epigrafe: string) {
+    const exists = epigrafesSeleccionados.includes(epigrafe);
+    onChange({
+      ...verification,
+      epigrafes_seleccionados: exists
+        ? epigrafesSeleccionados.filter((e) => e !== epigrafe)
+        : [...epigrafesSeleccionados, epigrafe],
+    });
+  }
+
+  function addCustomEpigrafe() {
+    const trimmed = newEpigrafeText.trim();
+    if (!trimmed) return;
+    const nextIndice = epigrafesIndice.includes(trimmed)
+      ? epigrafesIndice
+      : [...epigrafesIndice, trimmed];
+    const nextSelected = epigrafesSeleccionados.includes(trimmed)
+      ? epigrafesSeleccionados
+      : [...epigrafesSeleccionados, trimmed];
+    onChange({
+      ...verification,
+      epigrafes_indice: nextIndice,
+      epigrafes_seleccionados: nextSelected,
+    });
+    setNewEpigrafeText('');
+  }
 
   function updateErrorDraft(id: string, patch: Partial<DetectedErrorDraft>) {
     onChange({
@@ -253,6 +285,97 @@ export function OcrVerificationPanel({
             onChange={(ev) => onChange({ ...verification, transcripcion: ev.target.value })}
             className="mt-1.5 w-full rounded-xl border border-slate-300 bg-slate-50/50 px-3.5 py-3 font-mono text-xs leading-relaxed text-slate-900 focus:border-indigo-500 focus:bg-white focus:ring-2 focus:ring-indigo-200 focus:outline-none sm:text-sm"
           />
+        </div>
+
+        {/* Selector de epígrafes del índice */}
+        <div className="mt-5 rounded-2xl border border-indigo-200 bg-indigo-50/40 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2 text-sm font-bold text-indigo-950">
+              <ListChecks className="h-4 w-4 text-indigo-600" />
+              Índice / apartados: elige exactamente qué practicar hoy
+              {epigrafesSeleccionados.length > 0 && (
+                <span className="rounded-full bg-indigo-600 px-2 py-0.5 text-[11px] font-bold text-white">
+                  {epigrafesSeleccionados.length} elegido
+                  {epigrafesSeleccionados.length === 1 ? '' : 's'}
+                </span>
+              )}
+            </div>
+            {epigrafesIndice.length > 0 && (
+              <div className="flex items-center gap-2 text-xs">
+                <button
+                  type="button"
+                  onClick={() =>
+                    onChange({ ...verification, epigrafes_seleccionados: [...epigrafesIndice] })
+                  }
+                  className="font-semibold text-indigo-700 hover:underline"
+                >
+                  Marcar todos
+                </button>
+                <span className="text-slate-300">|</span>
+                <button
+                  type="button"
+                  onClick={() =>
+                    onChange({ ...verification, epigrafes_seleccionados: [] })
+                  }
+                  className="font-semibold text-slate-600 hover:underline"
+                >
+                  Limpiar (todo el tema)
+                </button>
+              </div>
+            )}
+          </div>
+
+          <p className="mt-1 text-xs text-slate-600">
+            Marca los epígrafes que quieras trabajar ahora (o déjalo sin marcar para incluir todo el
+            material). Podrás cambiar esta selección más adelante dentro del artefacto.
+          </p>
+
+          {epigrafesIndice.length > 0 && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {epigrafesIndice.map((ep, idx) => {
+                const selected = epigrafesSeleccionados.includes(ep);
+                return (
+                  <button
+                    key={`${ep}_${idx}`}
+                    type="button"
+                    onClick={() => toggleEpigrafe(ep)}
+                    className={`rounded-xl border px-3 py-1.5 text-left text-xs font-semibold transition-all ${
+                      selected
+                        ? 'border-indigo-600 bg-indigo-600 text-white shadow-xs'
+                        : 'border-indigo-200 bg-white text-slate-700 hover:border-indigo-400'
+                    }`}
+                  >
+                    {selected ? '✓ ' : '+ '}
+                    {ep}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          <div className="mt-3 flex gap-2">
+            <input
+              type="text"
+              value={newEpigrafeText}
+              onChange={(ev) => setNewEpigrafeText(ev.target.value)}
+              onKeyDown={(ev) => {
+                if (ev.key === 'Enter') {
+                  ev.preventDefault();
+                  addCustomEpigrafe();
+                }
+              }}
+              placeholder="Añadir apartado o tema específico que quieras practicar..."
+              className="flex-1 rounded-xl border border-indigo-200 bg-white px-3 py-2 text-xs text-slate-900 focus:border-indigo-500 focus:outline-none"
+            />
+            <button
+              type="button"
+              onClick={addCustomEpigrafe}
+              className="inline-flex items-center gap-1 rounded-xl bg-indigo-600 px-3 py-2 text-xs font-bold text-white hover:bg-indigo-700"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Añadir
+            </button>
+          </div>
         </div>
 
         {/* Compleción curricular LOMLOE Canarias */}
