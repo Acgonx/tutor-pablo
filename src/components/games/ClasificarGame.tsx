@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { CheckCircle2, Sparkles, Undo2, XCircle } from 'lucide-react';
 import type { FalloEnPartida, InteraccionPartida } from '../../types/firestore';
 import type { ClasificarPayload, GameCompletionResult } from '../../types/studyMaterial';
+import { MathText } from '../common/MathText';
 
 interface ClasificarGameProps {
   payload: ClasificarPayload;
@@ -127,7 +128,9 @@ export function ClasificarGame({ payload, onComplete }: ClasificarGameProps) {
                         : 'border-slate-300 bg-white text-slate-800 hover:border-indigo-400'
                     }`}
                   >
-                    <span>{el.texto}</span>
+                    <span>
+                      <MathText text={el.texto} />
+                    </span>
                     {el.es_repaso_libreta && (
                       <Sparkles
                         className={`h-3.5 w-3.5 shrink-0 ${
@@ -168,8 +171,12 @@ export function ClasificarGame({ payload, onComplete }: ClasificarGameProps) {
             >
               <div className="mb-3 flex items-start justify-between gap-2">
                 <div>
-                  <h4 className="text-base font-bold text-slate-900">{cat.nombre}</h4>
-                  <p className="text-xs text-slate-600">{cat.descripcion}</p>
+                  <h4 className="text-base font-bold text-slate-900">
+                    <MathText text={cat.nombre} />
+                  </h4>
+                  <p className="text-xs text-slate-600">
+                    <MathText text={cat.descripcion} />
+                  </p>
                 </div>
                 {readyToReceive && (
                   <span className="shrink-0 rounded-full bg-indigo-600 px-2.5 py-0.5 text-xs font-bold text-white">
@@ -198,7 +205,9 @@ export function ClasificarGame({ payload, onComplete }: ClasificarGameProps) {
                           }}
                           className="flex min-h-12 w-full items-center justify-between gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-left text-sm font-medium text-slate-800 hover:bg-slate-100"
                         >
-                          <span>{item.texto}</span>
+                          <span>
+                            <MathText text={item.texto} />
+                          </span>
                           <Undo2 className="h-4 w-4 shrink-0 text-slate-400" />
                         </button>
                       );
@@ -219,9 +228,13 @@ export function ClasificarGame({ payload, onComplete }: ClasificarGameProps) {
                           ) : (
                             <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-rose-600" />
                           )}
-                          <span>{item.texto}</span>
+                          <span>
+                            <MathText text={item.texto} />
+                          </span>
                         </div>
-                        <p className="mt-1 text-xs opacity-90">{item.explicacion}</p>
+                        <p className="mt-1 text-xs opacity-90">
+                          <MathText text={item.explicacion} />
+                        </p>
                         {!isCorrect && (
                           <p className="mt-1 text-xs font-bold">
                             Correcta: {categoryNameById.get(item.categoria_correcta_id)}

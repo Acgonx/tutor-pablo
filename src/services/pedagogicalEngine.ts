@@ -1,23 +1,30 @@
 import { isFirebaseConfigured } from '../lib/firebase';
 import {
   analyzeImagesOcr,
-  generateStudyPack,
+  generateAndamiaje,
+  generateEsquemaVisual,
+  generateSingleEvaluationDoc,
+  generateSingleMiniApp,
   iterateStudyPack,
-  regenerateSingleEvaluationDoc,
 } from '../lib/gemini';
 import {
   createArtefacto,
   updateArtefactoEvaluationDoc,
   updateArtefactoIteration,
+  updateArtefactoStudyPack,
 } from './artefactosService';
 import { upsertLibretaError } from './libretaErroresService';
 import { updateSesionPablo } from './sesionesService';
-import type { LibretaErrorDoc } from '../types/firestore';
+import type { LibretaErrorDoc, TipoJuego } from '../types/firestore';
 import type { FuenteDocumento, OcrVerificationData, UploadedImageItem } from '../types/ocr';
 import type {
   ArtefactoDoc,
+  EsquemaVisualData,
   ExamenPdfData,
+  ExplicacionAndamiajeData,
+  GamePayload,
   GeneratedStudyPack,
+  GenerationPromptConfig,
   NivelDificultad,
   TipoDocumentoEvaluacion,
 } from '../types/studyMaterial';
@@ -31,8 +38,7 @@ function createDraftId(index: number): string {
 
 /**
  * Paso 1 del flujo: Gemini Vision transcribe fotos/PDFs, propone compleción curricular
- * acorde al Decreto 30/2023 y detecta posibles errores dejando su origen como 'pendiente_confirmar'
- * para que el adulto confirme si son reales de Pablo o del propio material.
+ * acorde al Decreto 30/2023 y detecta posibles errores dejando su origen como 'pendiente_confirmar'.
  */
 export async function runStep1OcrAnalysis(params: {
   asignatura: string;
@@ -67,7 +73,7 @@ export async function runStep1OcrAnalysis(params: {
   };
 }
 
-export interface Step2GenerationResult {
+export interface InitializeArtifactResult {
   studyPack: GeneratedStudyPack;
   injectedErrors: LibretaErrorDoc[];
   savedNewErrorsCount: number;
@@ -76,16 +82,14 @@ export interface Step2GenerationResult {
 }
 
 /**
- * Paso 2 del motor pedagógico (con aislamiento estricto de artefactos):
- * 1. Solo guarda en libreta_errores los fallos marcados como 'error_pablo' con guardar_en_libreta=true.
- * 2. NO mezcla errores previos automáticamente: solo inyecta los que el docente invocó explícitamente.
- * 3. Genera las 4 salidas (Esquema, Andamiaje, 3 Fichas + Examen, 4 Mini-Apps) y guarda el artefacto aislado.
+ * Paso 2 instantáneo: guarda errores reales confirmados de Pablo e inicializa el artefacto
+ * vacío para que cada pestaña se genere bajo demanda al pinchar en ella.
  */
-export async function runStep2GenerateMaterials(
+export async function initializeArtifactFromVerification(
   verification: OcrVerificationData,
   dificultad: NivelDificultad = 'estandar',
   availableLibretaErrors: LibretaErrorDoc[] = [],
-): Promise<Step2GenerationResult> {
+): Promise<InitializeArtifactResult> {
   let savedNewErrorsCount = 0;
   let firestoreWarning: string | null = null;
 
@@ -120,11 +124,12 @@ export async function runStep2GenerateMaterials(
     }
   }
 
-  const studyPack = await generateStudyPack({
-    verification,
-    libretaErrores: invokedErrors,
-    dificultad,
-  });
+  const studyPack: GeneratedStudyPack = {
+    asignatura: verification.asignatura,
+    tema: verification.tema,
+    evaluacion_y_fichas: {},
+    mini_apps: {},
+  };
 
   let artefacto: ArtefactoDoc | null = null;
   if (isFirebaseConfigured) {
@@ -140,10 +145,10 @@ export async function runStep2GenerateMaterials(
         ),
       });
     } catch (error) {
-      console.error('[Motor Pedagógico] No se pudo guardar el artefacto en Firestore:', error);
+      console.error('[Motor Pedagógico] No se pudo crear el artefacto en Firestore:', error);
       firestoreWarning =
         firestoreWarning ??
-        'Se generó el material, pero no se pudo guardar en la colección "artefactos" de Firestore.';
+        'No se pudo guardar el artefacto en Firestore (revisa las reglas de seguridad).';
     }
   }
 
@@ -156,6 +161,180 @@ export async function runStep2GenerateMaterials(
   };
 }
 
+function resolveInvoked(
+  verification: OcrVerificationData,
+  availableLibretaErrors: LibretaErrorDoc[],
+): LibretaErrorDoc[] {
+  return availableLibretaErrors.filter((item) =>
+    verification.errores_invocados_ids.includes(item.id),
+  );
+}
+
+async function syncSesionIfAttached(
+  artefacto: ArtefactoDoc | null,
+  pack: GeneratedStudyPack,
+): Promise<void> {
+  if (!artefacto?.sesion_pablo_id) return;
+  await updateSesionPablo(artefacto.sesion_pablo_id, {
+    asignatura: pack.asignatura,
+    tema: pack.tema,
+    esquema_visual: pack.esquema_visual,
+    explicacion_andamiaje: pack.explicacion_andamiaje,
+    mini_apps: pack.mini_apps,
+  });
+}
+
+export async function runGenerateEsquema(params: {
+  studyPack: GeneratedStudyPack;
+  verification: OcrVerificationData;
+  artefacto: ArtefactoDoc | null;
+  availableLibretaErrors: LibretaErrorDoc[];
+  config: GenerationPromptConfig;
+}): Promise<{
+  esquema: EsquemaVisualData;
+  nextPack: GeneratedStudyPack;
+  nextArtefacto: ArtefactoDoc | null;
+}> {
+  const invoked = resolveInvoked(params.verification, params.availableLibretaErrors);
+  const esquema = await generateEsquemaVisual({
+    verification: params.verification,
+    libretaErrores: invoked,
+    config: params.config,
+  });
+
+  const nextPack: GeneratedStudyPack = {
+    ...params.studyPack,
+    esquema_visual: esquema,
+  };
+
+  let nextArtefacto = params.artefacto;
+  if (isFirebaseConfigured && params.artefacto) {
+    nextArtefacto = await updateArtefactoStudyPack({
+      artefacto: params.artefacto,
+      nextStudyPack: nextPack,
+    });
+    await syncSesionIfAttached(nextArtefacto, nextPack);
+  }
+
+  return { esquema, nextPack, nextArtefacto };
+}
+
+export async function runGenerateAndamiaje(params: {
+  studyPack: GeneratedStudyPack;
+  verification: OcrVerificationData;
+  artefacto: ArtefactoDoc | null;
+  availableLibretaErrors: LibretaErrorDoc[];
+  config: GenerationPromptConfig;
+}): Promise<{
+  andamiaje: ExplicacionAndamiajeData;
+  nextPack: GeneratedStudyPack;
+  nextArtefacto: ArtefactoDoc | null;
+}> {
+  const invoked = resolveInvoked(params.verification, params.availableLibretaErrors);
+  const andamiaje = await generateAndamiaje({
+    verification: params.verification,
+    libretaErrores: invoked,
+    config: params.config,
+  });
+
+  const nextPack: GeneratedStudyPack = {
+    ...params.studyPack,
+    explicacion_andamiaje: andamiaje,
+  };
+
+  let nextArtefacto = params.artefacto;
+  if (isFirebaseConfigured && params.artefacto) {
+    nextArtefacto = await updateArtefactoStudyPack({
+      artefacto: params.artefacto,
+      nextStudyPack: nextPack,
+    });
+    await syncSesionIfAttached(nextArtefacto, nextPack);
+  }
+
+  return { andamiaje, nextPack, nextArtefacto };
+}
+
+export async function runGenerateEvaluationDoc(params: {
+  tipoDoc: TipoDocumentoEvaluacion;
+  studyPack: GeneratedStudyPack;
+  verification: OcrVerificationData;
+  artefacto: ArtefactoDoc | null;
+  availableLibretaErrors: LibretaErrorDoc[];
+  config: GenerationPromptConfig;
+}): Promise<{
+  doc: ExamenPdfData;
+  nextPack: GeneratedStudyPack;
+  nextArtefacto: ArtefactoDoc | null;
+}> {
+  const invoked = resolveInvoked(params.verification, params.availableLibretaErrors);
+  const doc = await generateSingleEvaluationDoc({
+    tipoDoc: params.tipoDoc,
+    verification: params.verification,
+    libretaErrores: invoked,
+    config: params.config,
+    currentDoc: params.studyPack.evaluacion_y_fichas[params.tipoDoc],
+  });
+
+  const nextPack: GeneratedStudyPack = {
+    ...params.studyPack,
+    evaluacion_y_fichas: {
+      ...params.studyPack.evaluacion_y_fichas,
+      [params.tipoDoc]: doc,
+    },
+  };
+
+  let nextArtefacto = params.artefacto;
+  if (isFirebaseConfigured && params.artefacto) {
+    nextArtefacto = await updateArtefactoEvaluationDoc({
+      artefacto: params.artefacto,
+      tipoDoc: params.tipoDoc,
+      nextDoc: doc,
+    });
+  }
+
+  return { doc, nextPack, nextArtefacto };
+}
+
+export async function runGenerateMiniApp(params: {
+  tipoJuego: TipoJuego;
+  studyPack: GeneratedStudyPack;
+  verification: OcrVerificationData;
+  artefacto: ArtefactoDoc | null;
+  availableLibretaErrors: LibretaErrorDoc[];
+  config: GenerationPromptConfig;
+}): Promise<{
+  payload: GamePayload;
+  nextPack: GeneratedStudyPack;
+  nextArtefacto: ArtefactoDoc | null;
+}> {
+  const invoked = resolveInvoked(params.verification, params.availableLibretaErrors);
+  const payload = await generateSingleMiniApp({
+    tipoJuego: params.tipoJuego,
+    verification: params.verification,
+    libretaErrores: invoked,
+    config: params.config,
+  });
+
+  const nextPack: GeneratedStudyPack = {
+    ...params.studyPack,
+    mini_apps: {
+      ...params.studyPack.mini_apps,
+      [payload.tipo_juego]: payload,
+    },
+  };
+
+  let nextArtefacto = params.artefacto;
+  if (isFirebaseConfigured && params.artefacto) {
+    nextArtefacto = await updateArtefactoStudyPack({
+      artefacto: params.artefacto,
+      nextStudyPack: nextPack,
+    });
+    await syncSesionIfAttached(nextArtefacto, nextPack);
+  }
+
+  return { payload, nextPack, nextArtefacto };
+}
+
 export interface IterateArtifactResult {
   nextStudyPack: GeneratedStudyPack;
   nextArtefacto: ArtefactoDoc | null;
@@ -164,10 +343,6 @@ export interface IterateArtifactResult {
   firestoreWarning: string | null;
 }
 
-/**
- * Itera sobre un artefacto existente manteniendo estricto aislamiento (solo usa su propio contexto
- * y los errores que tuviera invocados explícitamente).
- */
 export async function runIterateArtifact(params: {
   currentPack: GeneratedStudyPack;
   verification: OcrVerificationData;
@@ -176,8 +351,9 @@ export async function runIterateArtifact(params: {
   targetDificultad: NivelDificultad;
   instruccionCambio: string;
 }): Promise<IterateArtifactResult> {
-  const invokedErrors = params.availableLibretaErrors.filter((item) =>
-    params.verification.errores_invocados_ids.includes(item.id),
+  const invokedErrors = resolveInvoked(
+    params.verification,
+    params.availableLibretaErrors,
   );
 
   const nextStudyPack = await iterateStudyPack({
@@ -205,13 +381,7 @@ export async function runIterateArtifact(params: {
       });
 
       if (params.artefacto.sesion_pablo_id) {
-        await updateSesionPablo(params.artefacto.sesion_pablo_id, {
-          asignatura: nextStudyPack.asignatura,
-          tema: nextStudyPack.tema,
-          esquema_visual: nextStudyPack.esquema_visual,
-          explicacion_andamiaje: nextStudyPack.explicacion_andamiaje,
-          mini_apps: nextStudyPack.mini_apps,
-        });
+        await syncSesionIfAttached(nextArtefacto, nextStudyPack);
         syncedSesion = true;
       }
     } catch (error) {
@@ -228,36 +398,4 @@ export async function runIterateArtifact(params: {
     syncedSesion,
     firestoreWarning,
   };
-}
-
-export async function runRegenerateEvaluationDoc(params: {
-  tipoDoc: TipoDocumentoEvaluacion;
-  verification: OcrVerificationData;
-  currentDoc: ExamenPdfData;
-  artefacto: ArtefactoDoc | null;
-  availableLibretaErrors: LibretaErrorDoc[];
-  dificultad: NivelDificultad;
-}): Promise<{ nextDoc: ExamenPdfData; nextArtefacto: ArtefactoDoc | null }> {
-  const invokedErrors = params.availableLibretaErrors.filter((item) =>
-    params.verification.errores_invocados_ids.includes(item.id),
-  );
-
-  const nextDoc = await regenerateSingleEvaluationDoc({
-    tipoDoc: params.tipoDoc,
-    verification: params.verification,
-    libretaErrores: invokedErrors,
-    currentDoc: params.currentDoc,
-    dificultad: params.dificultad,
-  });
-
-  let nextArtefacto: ArtefactoDoc | null = params.artefacto;
-  if (isFirebaseConfigured && params.artefacto) {
-    nextArtefacto = await updateArtefactoEvaluationDoc({
-      artefacto: params.artefacto,
-      tipoDoc: params.tipoDoc,
-      nextDoc,
-    });
-  }
-
-  return { nextDoc, nextArtefacto };
 }

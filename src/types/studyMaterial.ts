@@ -1,6 +1,74 @@
 import type { FalloEnPartida, InteraccionPartida, TipoJuego } from './firestore';
 import type { OcrVerificationData } from './ocr';
 
+export type FormaGeometrica =
+  | 'triangulo'
+  | 'rectangulo'
+  | 'cuadrado'
+  | 'circulo'
+  | 'rombo'
+  | 'trapecio';
+
+export interface MedidaFigura {
+  etiqueta: string;
+  valor: string;
+}
+
+export interface MarcaRectaNumerica {
+  valor: number;
+  etiqueta?: string;
+}
+
+export interface PuntoCoordenadas {
+  x: number;
+  y: number;
+  etiqueta?: string;
+}
+
+export interface VisualSpec {
+  tipo:
+    | 'fraccion_barra'
+    | 'fraccion_circulo'
+    | 'recta_numerica'
+    | 'figura_geometrica'
+    | 'ejes_coordenadas'
+    | 'tabla_datos'
+    | 'svg_libre';
+  titulo?: string;
+  pie_figura?: string;
+  // Para fraccion_barra y fraccion_circulo
+  denominador?: number;
+  numerador?: number;
+  filas?: number;
+  modo?: 'colorear' | 'lectura';
+  // Para recta_numerica
+  min?: number;
+  max?: number;
+  paso?: number;
+  marcas_destacadas?: MarcaRectaNumerica[];
+  // Para figura_geometrica
+  forma?: FormaGeometrica;
+  medidas?: MedidaFigura[];
+  // Para ejes_coordenadas
+  rango?: number;
+  puntos?: PuntoCoordenadas[];
+  // Para tabla_datos
+  columnas?: string[];
+  filas_tabla?: string[][];
+  filas_vacias_alumno?: number;
+  // Para svg_libre (diagramas de biología, geografía, tecnología...)
+  viewBox?: string;
+  svg_contenido?: string;
+}
+
+export interface GenerationPromptConfig {
+  cantidad: number;
+  tipologias: string[];
+  incluirDibujos: boolean;
+  dificultad: NivelDificultad;
+  promptLibre: string;
+}
+
 export interface EsquemaRama {
   titulo: string;
   icono_visual: string;
@@ -29,6 +97,7 @@ export interface EsquemaVisualData {
   ramas: EsquemaRama[];
   reglas_mnemotecnicas: ReglaMnemotecnica[];
   alertas_errores: ErrorFrecuenteComparativa[];
+  recurso_visual?: VisualSpec;
 }
 
 export interface BloqueAndamiaje {
@@ -40,6 +109,7 @@ export interface BloqueAndamiaje {
   pista: string;
   solucion_oculta: string;
   refuerza_error_libreta: boolean;
+  recurso_visual?: VisualSpec;
 }
 
 export interface ExplicacionAndamiajeData {
@@ -64,6 +134,7 @@ export interface PreguntaExamen {
   criterio_lomloe: string;
   solucion_docente: string;
   nota_correccion: string;
+  recurso_visual?: VisualSpec;
 }
 
 export interface ExamenPdfData {
@@ -85,10 +156,10 @@ export type TipoDocumentoEvaluacion =
   | 'simulacion_examen';
 
 export interface EvaluacionYFichasBundle {
-  ficha_refuerzo: ExamenPdfData;
-  ficha_estandar: ExamenPdfData;
-  ficha_ampliacion: ExamenPdfData;
-  simulacion_examen: ExamenPdfData;
+  ficha_refuerzo?: ExamenPdfData;
+  ficha_estandar?: ExamenPdfData;
+  ficha_ampliacion?: ExamenPdfData;
+  simulacion_examen?: ExamenPdfData;
 }
 
 export interface FlashcardItem {
@@ -98,6 +169,7 @@ export interface FlashcardItem {
   pista: string;
   concepto_clave: string;
   es_repaso_libreta: boolean;
+  recurso_visual?: VisualSpec;
 }
 
 export interface FlashcardsPayload {
@@ -138,6 +210,7 @@ export interface TriviaPregunta {
   explicacion: string;
   concepto_clave: string;
   es_repaso_libreta: boolean;
+  recurso_visual?: VisualSpec;
 }
 
 export interface TriviaRetoPayload {
@@ -155,6 +228,7 @@ export interface CazaErrorCaso {
   explicacion_correccion: string;
   concepto_clave: string;
   es_repaso_libreta: boolean;
+  recurso_visual?: VisualSpec;
 }
 
 export interface CazaErrorPayload {
@@ -193,18 +267,18 @@ export type GamePayload =
   | OrdenarPasosPayload;
 
 export interface MiniAppsBundle {
-  flashcards: FlashcardsPayload;
-  clasificar: ClasificarPayload;
-  trivia_reto: TriviaRetoPayload;
-  caza_error: CazaErrorPayload;
+  flashcards?: FlashcardsPayload;
+  clasificar?: ClasificarPayload;
+  trivia_reto?: TriviaRetoPayload;
+  caza_error?: CazaErrorPayload;
   ordenar_pasos?: OrdenarPasosPayload;
 }
 
 export interface GeneratedStudyPack {
   asignatura: string;
   tema: string;
-  esquema_visual: EsquemaVisualData;
-  explicacion_andamiaje: ExplicacionAndamiajeData;
+  esquema_visual?: EsquemaVisualData;
+  explicacion_andamiaje?: ExplicacionAndamiajeData;
   evaluacion_y_fichas: EvaluacionYFichasBundle;
   mini_apps: MiniAppsBundle;
 }

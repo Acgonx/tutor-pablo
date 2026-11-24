@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import type { TipoJuego } from '../../types/firestore';
 import type { GameCompletionResult, GamePayload } from '../../types/studyMaterial';
+import { MathText } from '../common/MathText';
 import { CazaErrorGame } from './CazaErrorGame';
 import { ClasificarGame } from './ClasificarGame';
 import { FlashcardsGame } from './FlashcardsGame';
@@ -198,18 +199,22 @@ export function GameRenderer({
                       )}
                       <div className="space-y-0.5">
                         <p className="font-bold">
-                          {idx + 1}. {inter.item}
+                          {idx + 1}. <MathText text={inter.item} />
                         </p>
                         <p>
-                          <strong>Respuesta de Pablo:</strong> {inter.respuesta_alumno}
+                          <strong>Respuesta de Pablo:</strong>{' '}
+                          <MathText text={inter.respuesta_alumno} />
                         </p>
                         {!inter.correcto && inter.respuesta_correcta && (
                           <p className="font-semibold text-emerald-800">
-                            <strong>Correcta:</strong> {inter.respuesta_correcta}
+                            <strong>Correcta:</strong>{' '}
+                            <MathText text={inter.respuesta_correcta} />
                           </p>
                         )}
                         {inter.explicacion && (
-                          <p className="text-slate-700">{inter.explicacion}</p>
+                          <p className="text-slate-700">
+                            <MathText text={inter.explicacion} />
+                          </p>
                         )}
                       </div>
                     </div>

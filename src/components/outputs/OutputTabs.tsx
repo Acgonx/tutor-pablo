@@ -2,6 +2,7 @@ import { useState } from 'react';
 import {
   ArrowLeft,
   Check,
+  CheckCircle2,
   Copy,
   ExternalLink,
   FileSpreadsheet,
@@ -23,8 +24,8 @@ import type { LibretaErrorDoc, RetoPabloHydrated, TipoJuego } from '../../types/
 import type { OcrVerificationData } from '../../types/ocr';
 import type {
   ArtefactoDoc,
-  GamePayload,
   GeneratedStudyPack,
+  GenerationPromptConfig,
   NivelDificultad,
   TipoDocumentoEvaluacion,
 } from '../../types/studyMaterial';
@@ -46,17 +47,31 @@ interface OutputTabsProps {
   isIterating: boolean;
   iterateError: string | null;
   iterateSuccessMessage: string | null;
-  regeneratingDocType: TipoDocumentoEvaluacion | null;
-  regenerateDocError: string | null;
+  isGeneratingEsquema: boolean;
+  esquemaError: string | null;
+  isGeneratingAndamiaje: boolean;
+  andamiajeError: string | null;
+  generatingDocType: TipoDocumentoEvaluacion | null;
+  generateDocError: string | null;
+  generatingGameType: TipoJuego | null;
+  generateGameError: string | null;
+  onGenerateEsquema: (config: GenerationPromptConfig) => Promise<void>;
+  onGenerateAndamiaje: (config: GenerationPromptConfig) => Promise<void>;
+  onGenerateEvaluationDoc: (
+    tipoDoc: TipoDocumentoEvaluacion,
+    config: GenerationPromptConfig,
+  ) => Promise<void>;
+  onGenerateMiniApp: (
+    tipo: TipoJuego,
+    config: GenerationPromptConfig,
+  ) => Promise<void>;
   onIterateArtifact: (
     targetDificultad: NivelDificultad,
     instruccionCambio: string,
   ) => Promise<void>;
-  onRegenerateEvaluationDoc: (tipoDoc: TipoDocumentoEvaluacion) => Promise<void>;
   onSesionAttached: (sesionId: string) => void;
   onBackToVerification: () => void;
   onStartNewSession: () => void;
-  onUpdateMiniApp: (tipo: TipoJuego, nextPayload: GamePayload) => void;
   onRetoPublished: (reto: RetoPabloHydrated) => void;
 }
 
@@ -96,7 +111,6 @@ const QUICK_PROMPTS: readonly string[] = [
 
 export function OutputTabs({
   studyPack,
-  verification,
   artefacto,
   dificultad,
   injectedErrors,
@@ -105,14 +119,22 @@ export function OutputTabs({
   isIterating,
   iterateError,
   iterateSuccessMessage,
-  regeneratingDocType,
-  regenerateDocError,
+  isGeneratingEsquema,
+  esquemaError,
+  isGeneratingAndamiaje,
+  andamiajeError,
+  generatingDocType,
+  generateDocError,
+  generatingGameType,
+  generateGameError,
+  onGenerateEsquema,
+  onGenerateAndamiaje,
+  onGenerateEvaluationDoc,
+  onGenerateMiniApp,
   onIterateArtifact,
-  onRegenerateEvaluationDoc,
   onSesionAttached,
   onBackToVerification,
   onStartNewSession,
-  onUpdateMiniApp,
   onRetoPublished,
 }: OutputTabsProps) {
   const [activeTab, setActiveTab] = useState<OutputTabId>('esquema');
@@ -130,6 +152,19 @@ export function OutputTabs({
   const sessionUrl = artefacto?.sesion_pablo_id
     ? `${window.location.origin}/sesion/${artefacto.sesion_pablo_id}`
     : null;
+
+  const hasAnyGeneratedContent = Boolean(
+    studyPack.esquema_visual ||
+      studyPack.explicacion_andamiaje ||
+      Object.values(studyPack.evaluacion_y_fichas).some(Boolean) ||
+      Object.values(studyPack.mini_apps).some(Boolean),
+  );
+
+  const hasShareableStudentContent = Boolean(
+    studyPack.esquema_visual ||
+      studyPack.explicacion_andamiaje ||
+      Object.values(studyPack.mini_apps).some(Boolean),
+  );
 
   async function handlePublishFullSession() {
     setSessionError(null);
@@ -176,6 +211,15 @@ export function OutputTabs({
 
   const nextVersion = (artefacto?.version ?? 1) + 1;
 
+  function isTabReady(tabId: OutputTabId): boolean {
+    if (tabId === 'esquema') return Boolean(studyPack.esquema_visual);
+    if (tabId === 'andamiaje') return Boolean(studyPack.explicacion_andamiaje);
+    if (tabId === 'examen') {
+      return Object.values(studyPack.evaluacion_y_fichas).some(Boolean);
+    }
+    return Object.values(studyPack.mini_apps).some(Boolean);
+  }
+
   return (
     <div className="space-y-5">
       <section className="no-print rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
@@ -196,20 +240,22 @@ export function OutputTabs({
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => setShowIteratePanel((prev) => !prev)}
-              className={`inline-flex items-center gap-1.5 rounded-xl border px-3.5 py-2 text-xs font-bold transition-colors ${
-                showIteratePanel
-                  ? 'border-indigo-600 bg-indigo-50 text-indigo-800'
-                  : 'border-indigo-200 bg-white text-indigo-700 hover:bg-indigo-50'
-              }`}
-            >
-              <SlidersHorizontal className="h-3.5 w-3.5" />
-              Iterar / Subir dificultad
-            </button>
+            {hasAnyGeneratedContent && (
+              <button
+                type="button"
+                onClick={() => setShowIteratePanel((prev) => !prev)}
+                className={`inline-flex items-center gap-1.5 rounded-xl border px-3.5 py-2 text-xs font-bold transition-colors ${
+                  showIteratePanel
+                    ? 'border-indigo-600 bg-indigo-50 text-indigo-800'
+                    : 'border-indigo-200 bg-white text-indigo-700 hover:bg-indigo-50'
+                }`}
+              >
+                <SlidersHorizontal className="h-3.5 w-3.5" />
+                Iterar todo / Subir dificultad
+              </button>
+            )}
 
-            {!sessionUrl && (
+            {!sessionUrl && hasShareableStudentContent && (
               <button
                 type="button"
                 disabled={!isFirebaseConfigured || isPublishingSession}
@@ -249,11 +295,8 @@ export function OutputTabs({
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="flex items-center gap-1.5 text-sm font-bold text-indigo-950">
                 <TrendingUp className="h-4 w-4 text-indigo-600" />
-                Iterar artefacto manteniendo consistencia global (generará v{nextVersion})
+                Iterar todo lo generado hasta ahora (generará v{nextVersion})
               </p>
-              <span className="text-xs text-slate-600">
-                Actualiza al unísono Esquema, Andamiaje, Examen y las 4 Mini-Apps
-              </span>
             </div>
 
             <div>
@@ -292,7 +335,7 @@ export function OutputTabs({
                 disabled={isIterating}
                 value={instruccionCambio}
                 onChange={(ev) => setInstruccionCambio(ev.target.value)}
-                placeholder="Ej: Sube la dificultad de los ejercicios, añade 2 preguntas más de desarrollo en el examen y haz las flashcards más exigentes."
+                placeholder="Ej: Sube la dificultad de los ejercicios, añade más figuras geométricas y reduce las pistas."
                 className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-sm text-slate-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 focus:outline-none"
               />
               <div className="mt-2 flex flex-wrap gap-1.5">
@@ -359,7 +402,7 @@ export function OutputTabs({
             <span>
               {injectedErrors.length > 0
                 ? `Artefacto con ${injectedErrors.length} error(es) previo(s) invocado(s) por ti`
-                : 'Artefacto aislado: generado solo con este material (sin mezclar otros temas)'}
+                : 'Artefacto aislado listo: pincha cada pestaña para configurar y generar bajo demanda'}
             </span>
             {savedNewErrorsCount > 0 && (
               <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-bold text-emerald-700 ring-1 ring-emerald-200">
@@ -433,6 +476,7 @@ export function OutputTabs({
           {TABS.map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
+            const ready = isTabReady(tab.id);
             return (
               <button
                 key={tab.id}
@@ -447,7 +491,14 @@ export function OutputTabs({
                 }`}
               >
                 <Icon className="h-4 w-4" />
-                {tab.label}
+                <span>{tab.label}</span>
+                {ready && (
+                  <CheckCircle2
+                    className={`h-3.5 w-3.5 ${
+                      isActive ? 'text-emerald-200' : 'text-emerald-600'
+                    }`}
+                  />
+                )}
               </button>
             );
           })}
@@ -459,30 +510,41 @@ export function OutputTabs({
           asignatura={studyPack.asignatura}
           tema={studyPack.tema}
           data={studyPack.esquema_visual}
+          defaultDificultad={dificultad}
+          isGenerating={isGeneratingEsquema}
+          errorMessage={esquemaError}
+          onGenerate={onGenerateEsquema}
         />
       )}
       {activeTab === 'andamiaje' && (
-        <AndamiajeTab data={studyPack.explicacion_andamiaje} />
+        <AndamiajeTab
+          data={studyPack.explicacion_andamiaje}
+          defaultDificultad={dificultad}
+          isGenerating={isGeneratingAndamiaje}
+          errorMessage={andamiajeError}
+          onGenerate={onGenerateAndamiaje}
+        />
       )}
       {activeTab === 'examen' && (
         <ExamenPdfTab
           asignatura={studyPack.asignatura}
           tema={studyPack.tema}
           bundle={studyPack.evaluacion_y_fichas}
-          regeneratingDocType={regeneratingDocType}
-          regenerateError={regenerateDocError}
-          onRegenerateDoc={onRegenerateEvaluationDoc}
+          defaultDificultad={dificultad}
+          generatingDocType={generatingDocType}
+          generateDocError={generateDocError}
+          onGenerateDoc={onGenerateEvaluationDoc}
         />
       )}
       {activeTab === 'miniapps' && (
         <MiniAppsTab
           asignatura={studyPack.asignatura}
           tema={studyPack.tema}
-          dificultad={dificultad}
+          defaultDificultad={dificultad}
           miniApps={studyPack.mini_apps}
-          verification={verification}
-          injectedErrors={injectedErrors}
-          onUpdateMiniApp={onUpdateMiniApp}
+          generatingGameType={generatingGameType}
+          generateGameError={generateGameError}
+          onGenerateMiniApp={onGenerateMiniApp}
           onRetoPublished={onRetoPublished}
         />
       )}

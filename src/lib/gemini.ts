@@ -18,6 +18,7 @@ import type {
   FlashcardsPayload,
   GamePayload,
   GeneratedStudyPack,
+  GenerationPromptConfig,
   MiniAppsBundle,
   NivelDificultad,
   TipoDocumentoEvaluacion,
@@ -29,29 +30,32 @@ export const GEMINI_MODEL = import.meta.env.VITE_GEMINI_MODEL?.trim() || 'gemini
 export const isGeminiConfigured = Boolean(import.meta.env.VITE_GEMINI_API_KEY?.trim());
 
 /**
- * Skill pedagógica integrada del docente ("Ejercicios 1º ESO Canarias"),
- * adaptada al motor JSON estructurado y a las reglas de aislamiento y evaluación de la app.
+ * Skill pedagógica integrada ("Ejercicios 1º ESO Canarias") con LaTeX (KaTeX) y figuras visuales.
  */
 export const CUSTOM_PEDAGOGICAL_SKILL = `
 SKILL PEDAGÓGICA: EJERCICIOS Y EVALUACIÓN 1º ESO CANARIAS (DECRETO 30/2023, DE 16 DE MARZO)
 
 1. MARCO NORMATIVO Y CONTEXTO CANARIO:
 - Alinea cada actividad, ficha, examen y mini-app con el Decreto 30/2023 (Canarias) para 1º de ESO (12-13 años).
-- Moviliza saberes básicos y criterios de evaluación reales de la materia, favoreciendo situaciones de aprendizaje contextualizadas con referentes del entorno sociocultural y natural de Canarias cuando sea pertinente (sin forzarlo artificialmente).
+- Moviliza saberes básicos y criterios de evaluación reales de la materia, favoreciendo situaciones de aprendizaje contextualizadas con referentes del entorno sociocultural y natural de Canarias cuando sea pertinente.
 - Cuando los apuntes o fotos subidas estén incompletos respecto a los saberes básicos oficiales del tema, complétalos de forma estructurada y rigurosa.
 
-2. ESTRUCTURA PEDAGÓGICA PARA 12 AÑOS (SIN SOBRECARGA COGNITIVA):
-- Lenguaje cercano, riguroso pero claro, motivador y sin ruido visual ni bloques de texto excesivos.
-- Progresión graduada en 3 niveles para las fichas de trabajo:
-  * Nivel 1 (Ficha Refuerzo · Activación y conceptos clave): definición, identificación, emparejamiento y consolidación sin sobrecarga.
-  * Nivel 2 (Ficha Estándar · Aplicación guiada): cálculos, análisis de oraciones, interpretación de datos/gráficos o procedimientos paso a paso.
-  * Nivel 3 (Ficha Ampliación · Transferencia y reto): resolución de problemas reales, deducción y razonamiento en varios pasos.
-- Diferenciación estricta frente a la Simulación de Examen: el examen oficial NO es práctica guiada ni incluye pistas; comprueba conocimientos, saberes y capacidades según criterios de evaluación reales.
-- Solucionario completo paso a paso: en cada pregunta de ficha o examen proporciona clave de respuesta exacta y explicación paso a paso en los ejercicios complejos (solucion_docente y nota_correccion).
+2. NOTACIÓN MATEMÁTICA LATEX (OBLIGATORIO PARA FÓRMULAS Y FRACCIONES):
+- Usa SIEMPRE delimitadores LaTeX ($...$ en línea y $$...$$ en bloque) para expresiones matemáticas, fracciones (ej. $\\frac{3}{4}$), potencias ($2^3$), raíces ($\\sqrt{25}$), ecuaciones ($2x + 3 = 11$), ángulos ($90^\\circ$) o unidades compuestas ($\\text{cm}^2$).
+- No pongas $ sueltos para dinero: usa "euros" o "€" para precios (ej. 12 €).
 
-3. REGLAS PARA MINI-APPS LÚDICAS Y NOTACIÓN:
-- En todas las mini-apps (Flashcards, Clasificar, Trivia Reto y ¡Caza al Error!), ofrece feedback inmediato y explicativo tras cada respuesta (no solo si acierta o falla, sino el porqué pedagógico).
-- Usa notación matemática y científica limpia en texto/Unicode legible (ej. ×, ÷, ², ³, √, ≤, ≥, fracciones 3/4), evitando LaTeX crudo con delimitadores $ o $$ que no se renderizarían en tarjetas o botones interactivos.
+3. DIBUJOS, FIGURAS GEOMÉTRICAS Y RECURSOS VISUALES (recurso_visual):
+- Cuando el ejercicio involucre representar o colorear fracciones, usa "fraccion_barra" o "fraccion_circulo" con "denominador", "numerador" y "modo": "colorear" (en Versión Alumno aparecerá en blanco para que Pablo la pinte, y en el solucionario docente aparecerá coloreada) o "lectura" (ya sombreada para identificar la fracción).
+- Cuando involucre comparar u ordenar números/fracciones, usa "recta_numerica" ("min", "max", "paso", "marcas_destacadas").
+- Cuando involucre áreas, perímetros o geometría, usa "figura_geometrica" ("forma": triangulo|rectangulo|cuadrado|circulo|rombo|trapecio, "medidas").
+- Para coordenadas cartesianas, usa "ejes_coordenadas". Para tablas de proporcionalidad, datos o análisis morfológico, usa "tabla_datos".
+- Para otras materias (Biología, Tecnología, Geografía), cuando un dibujo ayude, usa "svg_libre" con SVG limpio y etiquetas claras dentro de viewBox="0 0 280 160".
+
+4. ESTRUCTURA PEDAGÓGICA Y SOLUCIONARIO:
+- Lenguaje cercano, riguroso pero claro, motivador y sin sobrecarga cognitiva.
+- Diferencia estrictamente fichas graduadas de práctica frente a Simulación de Examen (evaluación objetiva sin pistas).
+- Proporciona siempre solucionario paso a paso en ejercicios complejos (solucion_docente y nota_correccion).
+- En todas las mini-apps da feedback inmediato explicando el porqué pedagógico.
 - Respeta siempre el aislamiento del artefacto actual: no mezcles temas ni errores de otros artefactos salvo los invocados expresamente por el docente.
 `.trim();
 
@@ -99,46 +103,18 @@ export interface RawOcrResponse {
 const ocrResponseSchema: Schema = {
   type: Type.OBJECT,
   properties: {
-    tema: {
-      type: Type.STRING,
-      description: 'Título breve y claro del tema o unidad didáctica detectada.',
-    },
-    transcripcion: {
-      type: Type.STRING,
-      description:
-        'Transcripción fiel, ordenada y legible de todo el texto, definiciones, ejemplos, operaciones o preguntas encontradas en las imágenes o PDFs.',
-    },
-    contenido_curricular_completado: {
-      type: Type.STRING,
-      description:
-        'Ampliación y compleción de los saberes básicos del tema según el currículo oficial de 1º ESO en Canarias (Decreto 30/2023) si en los apuntes subidos faltan definiciones, reglas, propiedades o ejemplos clave.',
-    },
-    criterios_evaluacion_lomloe: {
-      type: Type.ARRAY,
-      description:
-        'Entre 2 y 4 criterios de evaluación / saberes básicos oficiales de 1º ESO Canarias (Decreto 30/2023) vinculados al tema.',
-      items: { type: Type.STRING },
-    },
-    observaciones_legibilidad: {
-      type: Type.STRING,
-      description:
-        'Advertencias para el adulto sobre palabras dudosas, zonas borrosas, letra poco legible o si hay errores que podrían ser ejemplos del libro.',
-    },
+    tema: { type: Type.STRING },
+    transcripcion: { type: Type.STRING },
+    contenido_curricular_completado: { type: Type.STRING },
+    criterios_evaluacion_lomloe: { type: Type.ARRAY, items: { type: Type.STRING } },
+    observaciones_legibilidad: { type: Type.STRING },
     errores_detectados: {
       type: Type.ARRAY,
-      description:
-        'Lista de errores conceptuales, de cálculo, ortográficos o procedimentales detectados (ya sea en correcciones del alumno o en ejercicios del propio material).',
       items: {
         type: Type.OBJECT,
         properties: {
-          concepto_fallado: {
-            type: Type.STRING,
-            description: 'Nombre corto del concepto donde se observa el fallo.',
-          },
-          explicacion_error: {
-            type: Type.STRING,
-            description: 'Explicación pedagógica de qué falló exactamente y cuál es la forma correcta.',
-          },
+          concepto_fallado: { type: Type.STRING },
+          explicacion_error: { type: Type.STRING },
           severidad: {
             type: Type.STRING,
             format: 'enum',
@@ -159,269 +135,192 @@ const ocrResponseSchema: Schema = {
   ],
 };
 
-const flashcardsSchema: Schema = {
+const visualSpecSchema: Schema = {
   type: Type.OBJECT,
+  nullable: true,
+  description:
+    'Figura geométrica, representación de fracción, recta numérica, tabla o diagrama SVG opcional para acompañar el enunciado.',
   properties: {
-    tipo_juego: { type: Type.STRING, format: 'enum', enum: ['flashcards'] },
-    titulo: { type: Type.STRING },
-    instrucciones: { type: Type.STRING },
-    tarjetas: {
-      type: Type.ARRAY,
-      description: 'Entre 6 y 8 tarjetas de Active Recall adaptadas a 1º ESO.',
-      items: {
-        type: Type.OBJECT,
-        properties: {
-          id: { type: Type.STRING },
-          frente: { type: Type.STRING, description: 'Pregunta directa, reto o concepto a recordar.' },
-          reverso: { type: Type.STRING, description: 'Respuesta clara, precisa y con ejemplo breve.' },
-          pista: { type: Type.STRING, description: 'Pista breve que activa el recuerdo sin dar la solución.' },
-          concepto_clave: { type: Type.STRING },
-          es_repaso_libreta: { type: Type.BOOLEAN },
-        },
-        required: ['id', 'frente', 'reverso', 'pista', 'concepto_clave', 'es_repaso_libreta'],
-      },
-    },
-  },
-  required: ['tipo_juego', 'titulo', 'instrucciones', 'tarjetas'],
-};
-
-const clasificarSchema: Schema = {
-  type: Type.OBJECT,
-  properties: {
-    tipo_juego: { type: Type.STRING, format: 'enum', enum: ['clasificar'] },
-    titulo: { type: Type.STRING },
-    instrucciones: { type: Type.STRING },
-    categorias: {
-      type: Type.ARRAY,
-      description: 'Entre 2 y 4 categorías claras y mutuamente excluyentes.',
-      items: {
-        type: Type.OBJECT,
-        properties: {
-          id: { type: Type.STRING },
-          nombre: { type: Type.STRING },
-          descripcion: { type: Type.STRING },
-        },
-        required: ['id', 'nombre', 'descripcion'],
-      },
-    },
-    elementos: {
-      type: Type.ARRAY,
-      description: 'Entre 6 y 8 elementos para clasificar.',
-      items: {
-        type: Type.OBJECT,
-        properties: {
-          id: { type: Type.STRING },
-          texto: { type: Type.STRING },
-          categoria_correcta_id: { type: Type.STRING },
-          explicacion: { type: Type.STRING },
-          es_repaso_libreta: { type: Type.BOOLEAN },
-        },
-        required: ['id', 'texto', 'categoria_correcta_id', 'explicacion', 'es_repaso_libreta'],
-      },
-    },
-  },
-  required: ['tipo_juego', 'titulo', 'instrucciones', 'categorias', 'elementos'],
-};
-
-const triviaRetoSchema: Schema = {
-  type: Type.OBJECT,
-  properties: {
-    tipo_juego: { type: Type.STRING, format: 'enum', enum: ['trivia_reto'] },
-    titulo: { type: Type.STRING },
-    instrucciones: { type: Type.STRING },
-    preguntas: {
-      type: Type.ARRAY,
-      description: 'Entre 6 y 8 preguntas tipo test con exactamente 4 opciones.',
-      items: {
-        type: Type.OBJECT,
-        properties: {
-          id: { type: Type.STRING },
-          pregunta: { type: Type.STRING },
-          opciones: {
-            type: Type.ARRAY,
-            description: 'Exactamente 4 opciones plausibles sin prefijo A/B/C/D.',
-            items: { type: Type.STRING },
-          },
-          indice_correcto: { type: Type.INTEGER },
-          pista: { type: Type.STRING },
-          explicacion: { type: Type.STRING },
-          concepto_clave: { type: Type.STRING },
-          es_repaso_libreta: { type: Type.BOOLEAN },
-        },
-        required: [
-          'id',
-          'pregunta',
-          'opciones',
-          'indice_correcto',
-          'pista',
-          'explicacion',
-          'concepto_clave',
-          'es_repaso_libreta',
-        ],
-      },
-    },
-  },
-  required: ['tipo_juego', 'titulo', 'instrucciones', 'preguntas'],
-};
-
-const cazaErrorSchema: Schema = {
-  type: Type.OBJECT,
-  properties: {
-    tipo_juego: { type: Type.STRING, format: 'enum', enum: ['caza_error'] },
-    titulo: { type: Type.STRING },
-    instrucciones: { type: Type.STRING },
-    casos: {
-      type: Type.ARRAY,
-      description:
-        'Entre 5 y 7 casos lúdicos tipo detective donde el alumno debe cazar la única afirmación, cálculo o frase falsa/errónea entre 3 o 4 opciones.',
-      items: {
-        type: Type.OBJECT,
-        properties: {
-          id: { type: Type.STRING },
-          contexto: {
-            type: Type.STRING,
-            description: 'Situación breve o enunciado del caso de detective.',
-          },
-          afirmaciones: {
-            type: Type.ARRAY,
-            description: 'Entre 3 y 4 afirmaciones o resoluciones; exactamente UNA contiene el error/trampa.',
-            items: { type: Type.STRING },
-          },
-          indice_error: {
-            type: Type.INTEGER,
-            description: 'Índice de base 0 de la afirmación que contiene el error a cazar.',
-          },
-          explicacion_correccion: {
-            type: Type.STRING,
-            description: 'Por qué esa afirmación es falsa y cuál es la versión correcta.',
-          },
-          concepto_clave: { type: Type.STRING },
-          es_repaso_libreta: { type: Type.BOOLEAN },
-        },
-        required: [
-          'id',
-          'contexto',
-          'afirmaciones',
-          'indice_error',
-          'explicacion_correccion',
-          'concepto_clave',
-          'es_repaso_libreta',
-        ],
-      },
-    },
-  },
-  required: ['tipo_juego', 'titulo', 'instrucciones', 'casos'],
-};
-
-const esquemaYAndamiajeSchema: Schema = {
-  type: Type.OBJECT,
-  properties: {
-    esquema_visual: {
-      type: Type.OBJECT,
-      properties: {
-        titulo_central: { type: Type.STRING },
-        subtitulo_competencial: { type: Type.STRING },
-        enfoque_canarias_lomloe: { type: Type.STRING },
-        ramas: {
-          type: Type.ARRAY,
-          items: {
-            type: Type.OBJECT,
-            properties: {
-              titulo: { type: Type.STRING },
-              icono_visual: { type: Type.STRING },
-              resumen_clave: { type: Type.STRING },
-              subconceptos: { type: Type.ARRAY, items: { type: Type.STRING } },
-              conexion_con_otros_temas: { type: Type.STRING },
-              es_repaso_libreta: { type: Type.BOOLEAN },
-            },
-            required: [
-              'titulo',
-              'icono_visual',
-              'resumen_clave',
-              'subconceptos',
-              'conexion_con_otros_temas',
-              'es_repaso_libreta',
-            ],
-          },
-        },
-        reglas_mnemotecnicas: {
-          type: Type.ARRAY,
-          items: {
-            type: Type.OBJECT,
-            properties: {
-              regla: { type: Type.STRING },
-              significado: { type: Type.STRING },
-              ejemplo_aplicado: { type: Type.STRING },
-            },
-            required: ['regla', 'significado', 'ejemplo_aplicado'],
-          },
-        },
-        alertas_errores: {
-          type: Type.ARRAY,
-          items: {
-            type: Type.OBJECT,
-            properties: {
-              error_comun: { type: Type.STRING },
-              forma_correcta: { type: Type.STRING },
-              truco_para_evitarlo: { type: Type.STRING },
-            },
-            required: ['error_comun', 'forma_correcta', 'truco_para_evitarlo'],
-          },
-        },
-      },
-      required: [
-        'titulo_central',
-        'subtitulo_competencial',
-        'enfoque_canarias_lomloe',
-        'ramas',
-        'reglas_mnemotecnicas',
-        'alertas_errores',
+    tipo: {
+      type: Type.STRING,
+      format: 'enum',
+      enum: [
+        'fraccion_barra',
+        'fraccion_circulo',
+        'recta_numerica',
+        'figura_geometrica',
+        'ejes_coordenadas',
+        'tabla_datos',
+        'svg_libre',
       ],
     },
-    explicacion_andamiaje: {
-      type: Type.OBJECT,
-      properties: {
-        introduccion: { type: Type.STRING },
-        bloques: {
-          type: Type.ARRAY,
-          items: {
-            type: Type.OBJECT,
-            properties: {
-              numero: { type: Type.INTEGER },
-              titulo: { type: Type.STRING },
-              explicacion_breve: { type: Type.STRING },
-              anclaje_visual_dual_coding: { type: Type.STRING },
-              pregunta_verificacion: { type: Type.STRING },
-              pista: { type: Type.STRING },
-              solucion_oculta: { type: Type.STRING },
-              refuerza_error_libreta: { type: Type.BOOLEAN },
-            },
-            required: [
-              'numero',
-              'titulo',
-              'explicacion_breve',
-              'anclaje_visual_dual_coding',
-              'pregunta_verificacion',
-              'pista',
-              'solucion_oculta',
-              'refuerza_error_libreta',
-            ],
-          },
+    titulo: { type: Type.STRING },
+    pie_figura: { type: Type.STRING },
+    denominador: { type: Type.INTEGER },
+    numerador: { type: Type.INTEGER },
+    filas: { type: Type.INTEGER },
+    modo: { type: Type.STRING, format: 'enum', enum: ['colorear', 'lectura'] },
+    min: { type: Type.NUMBER },
+    max: { type: Type.NUMBER },
+    paso: { type: Type.NUMBER },
+    marcas_destacadas: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          valor: { type: Type.NUMBER },
+          etiqueta: { type: Type.STRING },
         },
-        reto_integrador_final: {
-          type: Type.OBJECT,
-          properties: {
-            situacion_problema: { type: Type.STRING },
-            pregunta_guia: { type: Type.STRING },
-            respuesta_modelo: { type: Type.STRING },
-          },
-          required: ['situacion_problema', 'pregunta_guia', 'respuesta_modelo'],
-        },
+        required: ['valor'],
       },
-      required: ['introduccion', 'bloques', 'reto_integrador_final'],
+    },
+    forma: {
+      type: Type.STRING,
+      format: 'enum',
+      enum: ['triangulo', 'rectangulo', 'cuadrado', 'circulo', 'rombo', 'trapecio'],
+    },
+    medidas: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          etiqueta: { type: Type.STRING },
+          valor: { type: Type.STRING },
+        },
+        required: ['etiqueta', 'valor'],
+      },
+    },
+    rango: { type: Type.INTEGER },
+    puntos: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          x: { type: Type.NUMBER },
+          y: { type: Type.NUMBER },
+          etiqueta: { type: Type.STRING },
+        },
+        required: ['x', 'y'],
+      },
+    },
+    columnas: { type: Type.ARRAY, items: { type: Type.STRING } },
+    filas_tabla: {
+      type: Type.ARRAY,
+      items: { type: Type.ARRAY, items: { type: Type.STRING } },
+    },
+    filas_vacias_alumno: { type: Type.INTEGER },
+    viewBox: { type: Type.STRING },
+    svg_contenido: { type: Type.STRING },
+  },
+  required: ['tipo'],
+};
+
+const esquemaVisualSchema: Schema = {
+  type: Type.OBJECT,
+  properties: {
+    titulo_central: { type: Type.STRING },
+    subtitulo_competencial: { type: Type.STRING },
+    enfoque_canarias_lomloe: { type: Type.STRING },
+    recurso_visual: visualSpecSchema,
+    ramas: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          titulo: { type: Type.STRING },
+          icono_visual: { type: Type.STRING },
+          resumen_clave: { type: Type.STRING },
+          subconceptos: { type: Type.ARRAY, items: { type: Type.STRING } },
+          conexion_con_otros_temas: { type: Type.STRING },
+          es_repaso_libreta: { type: Type.BOOLEAN },
+        },
+        required: [
+          'titulo',
+          'icono_visual',
+          'resumen_clave',
+          'subconceptos',
+          'conexion_con_otros_temas',
+          'es_repaso_libreta',
+        ],
+      },
+    },
+    reglas_mnemotecnicas: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          regla: { type: Type.STRING },
+          significado: { type: Type.STRING },
+          ejemplo_aplicado: { type: Type.STRING },
+        },
+        required: ['regla', 'significado', 'ejemplo_aplicado'],
+      },
+    },
+    alertas_errores: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          error_comun: { type: Type.STRING },
+          forma_correcta: { type: Type.STRING },
+          truco_para_evitarlo: { type: Type.STRING },
+        },
+        required: ['error_comun', 'forma_correcta', 'truco_para_evitarlo'],
+      },
     },
   },
-  required: ['esquema_visual', 'explicacion_andamiaje'],
+  required: [
+    'titulo_central',
+    'subtitulo_competencial',
+    'enfoque_canarias_lomloe',
+    'ramas',
+    'reglas_mnemotecnicas',
+    'alertas_errores',
+  ],
+};
+
+const andamiajeSchema: Schema = {
+  type: Type.OBJECT,
+  properties: {
+    introduccion: { type: Type.STRING },
+    bloques: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          numero: { type: Type.INTEGER },
+          titulo: { type: Type.STRING },
+          explicacion_breve: { type: Type.STRING },
+          anclaje_visual_dual_coding: { type: Type.STRING },
+          pregunta_verificacion: { type: Type.STRING },
+          pista: { type: Type.STRING },
+          solucion_oculta: { type: Type.STRING },
+          refuerza_error_libreta: { type: Type.BOOLEAN },
+          recurso_visual: visualSpecSchema,
+        },
+        required: [
+          'numero',
+          'titulo',
+          'explicacion_breve',
+          'anclaje_visual_dual_coding',
+          'pregunta_verificacion',
+          'pista',
+          'solucion_oculta',
+          'refuerza_error_libreta',
+        ],
+      },
+    },
+    reto_integrador_final: {
+      type: Type.OBJECT,
+      properties: {
+        situacion_problema: { type: Type.STRING },
+        pregunta_guia: { type: Type.STRING },
+        respuesta_modelo: { type: Type.STRING },
+      },
+      required: ['situacion_problema', 'pregunta_guia', 'respuesta_modelo'],
+    },
+  },
+  required: ['introduccion', 'bloques', 'reto_integrador_final'],
 };
 
 const fichaOExamenSchema: Schema = {
@@ -436,7 +335,6 @@ const fichaOExamenSchema: Schema = {
     nivel_etiqueta: { type: Type.STRING },
     preguntas: {
       type: Type.ARRAY,
-      description: 'Entre 5 y 8 preguntas variadas que sumen puntuacion_total (10 puntos).',
       items: {
         type: Type.OBJECT,
         properties: {
@@ -453,6 +351,7 @@ const fichaOExamenSchema: Schema = {
           criterio_lomloe: { type: Type.STRING },
           solucion_docente: { type: Type.STRING },
           nota_correccion: { type: Type.STRING },
+          recurso_visual: visualSpecSchema,
         },
         required: [
           'numero',
@@ -482,42 +381,160 @@ const fichaOExamenSchema: Schema = {
   ],
 };
 
-const evaluacionYFichasSchema: Schema = {
+const flashcardsSchema: Schema = {
   type: Type.OBJECT,
   properties: {
-    ficha_refuerzo: fichaOExamenSchema,
-    ficha_estandar: fichaOExamenSchema,
-    ficha_ampliacion: fichaOExamenSchema,
-    simulacion_examen: fichaOExamenSchema,
+    tipo_juego: { type: Type.STRING, format: 'enum', enum: ['flashcards'] },
+    titulo: { type: Type.STRING },
+    instrucciones: { type: Type.STRING },
+    tarjetas: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          id: { type: Type.STRING },
+          frente: { type: Type.STRING },
+          reverso: { type: Type.STRING },
+          pista: { type: Type.STRING },
+          concepto_clave: { type: Type.STRING },
+          es_repaso_libreta: { type: Type.BOOLEAN },
+          recurso_visual: visualSpecSchema,
+        },
+        required: ['id', 'frente', 'reverso', 'pista', 'concepto_clave', 'es_repaso_libreta'],
+      },
+    },
   },
-  required: [
-    'ficha_refuerzo',
-    'ficha_estandar',
-    'ficha_ampliacion',
-    'simulacion_examen',
-  ],
+  required: ['tipo_juego', 'titulo', 'instrucciones', 'tarjetas'],
 };
 
-const miniAppsSchema: Schema = {
+const clasificarSchema: Schema = {
   type: Type.OBJECT,
   properties: {
-    flashcards: flashcardsSchema,
-    clasificar: clasificarSchema,
-    trivia_reto: triviaRetoSchema,
-    caza_error: cazaErrorSchema,
+    tipo_juego: { type: Type.STRING, format: 'enum', enum: ['clasificar'] },
+    titulo: { type: Type.STRING },
+    instrucciones: { type: Type.STRING },
+    categorias: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          id: { type: Type.STRING },
+          nombre: { type: Type.STRING },
+          descripcion: { type: Type.STRING },
+        },
+        required: ['id', 'nombre', 'descripcion'],
+      },
+    },
+    elementos: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          id: { type: Type.STRING },
+          texto: { type: Type.STRING },
+          categoria_correcta_id: { type: Type.STRING },
+          explicacion: { type: Type.STRING },
+          es_repaso_libreta: { type: Type.BOOLEAN },
+        },
+        required: ['id', 'texto', 'categoria_correcta_id', 'explicacion', 'es_repaso_libreta'],
+      },
+    },
   },
-  required: ['flashcards', 'clasificar', 'trivia_reto', 'caza_error'],
+  required: ['tipo_juego', 'titulo', 'instrucciones', 'categorias', 'elementos'],
+};
+
+const triviaRetoSchema: Schema = {
+  type: Type.OBJECT,
+  properties: {
+    tipo_juego: { type: Type.STRING, format: 'enum', enum: ['trivia_reto'] },
+    titulo: { type: Type.STRING },
+    instrucciones: { type: Type.STRING },
+    preguntas: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          id: { type: Type.STRING },
+          pregunta: { type: Type.STRING },
+          opciones: { type: Type.ARRAY, items: { type: Type.STRING } },
+          indice_correcto: { type: Type.INTEGER },
+          pista: { type: Type.STRING },
+          explicacion: { type: Type.STRING },
+          concepto_clave: { type: Type.STRING },
+          es_repaso_libreta: { type: Type.BOOLEAN },
+          recurso_visual: visualSpecSchema,
+        },
+        required: [
+          'id',
+          'pregunta',
+          'opciones',
+          'indice_correcto',
+          'pista',
+          'explicacion',
+          'concepto_clave',
+          'es_repaso_libreta',
+        ],
+      },
+    },
+  },
+  required: ['tipo_juego', 'titulo', 'instrucciones', 'preguntas'],
+};
+
+const cazaErrorSchema: Schema = {
+  type: Type.OBJECT,
+  properties: {
+    tipo_juego: { type: Type.STRING, format: 'enum', enum: ['caza_error'] },
+    titulo: { type: Type.STRING },
+    instrucciones: { type: Type.STRING },
+    casos: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          id: { type: Type.STRING },
+          contexto: { type: Type.STRING },
+          afirmaciones: { type: Type.ARRAY, items: { type: Type.STRING } },
+          indice_error: { type: Type.INTEGER },
+          explicacion_correccion: { type: Type.STRING },
+          concepto_clave: { type: Type.STRING },
+          es_repaso_libreta: { type: Type.BOOLEAN },
+          recurso_visual: visualSpecSchema,
+        },
+        required: [
+          'id',
+          'contexto',
+          'afirmaciones',
+          'indice_error',
+          'explicacion_correccion',
+          'concepto_clave',
+          'es_repaso_libreta',
+        ],
+      },
+    },
+  },
+  required: ['tipo_juego', 'titulo', 'instrucciones', 'casos'],
 };
 
 const DIFICULTAD_GUIDANCE: Record<NivelDificultad, string> = {
   refuerzo:
-    'NIVEL GLOBAL REFUERZO GUIADO: explica en pasos muy pequeños, lenguaje cercano y consolidación de base.',
+    'NIVEL REFUERZO GUIADO: pasos muy pequeños, lenguaje muy cercano y consolidación de base.',
   estandar:
-    'NIVEL GLOBAL ESTÁNDAR 1º ESO (LOMLOE CANARIAS): equilibrio entre comprensión clara, práctica variada y situaciones competenciales.',
+    'NIVEL ESTÁNDAR 1º ESO (LOMLOE CANARIAS): equilibrio entre comprensión, práctica y competencia.',
   ampliacion:
-    'NIVEL GLOBAL AMPLIACIÓN: menos pistas obvias, razonamiento en varios pasos y transferencia a contextos nuevos.',
+    'NIVEL AMPLIACIÓN: menos pistas obvias, razonamiento en varios pasos y transferencia.',
   reto_alto:
-    'NIVEL GLOBAL RETO ALTO: preguntas exigentes, distractores inteligentes, problemas combinados y situaciones competenciales profundas.',
+    'NIVEL RETO ALTO: ejercicios exigentes, distractores inteligentes y problemas combinados.',
+};
+
+const EVAL_DOC_GUIDANCE: Record<TipoDocumentoEvaluacion, string> = {
+  ficha_refuerzo:
+    'FICHA 1 · NIVEL REFUERZO / BASE (es_simulacion_examen: false): consolidación guiada de conceptos esenciales.',
+  ficha_estandar:
+    'FICHA 2 · NIVEL ESTÁNDAR / PRÁCTICA (es_simulacion_examen: false): aplicación variada de los saberes básicos.',
+  ficha_ampliacion:
+    'FICHA 3 · NIVEL AMPLIACIÓN / COMPETENCIAL (es_simulacion_examen: false): transferencia y razonamiento.',
+  simulacion_examen:
+    'SIMULACIÓN OFICIAL DE EXAMEN (es_simulacion_examen: true): NO es práctica ni da pistas; evalúa conocimientos, saberes y capacidades según criterios del Decreto 30/2023.',
 };
 
 function sanitizeGamePayload(payload: GamePayload): GamePayload {
@@ -661,11 +678,33 @@ ${
 }=== ERRORES REALES DE PABLO EN ESTA ENTREGA (A REFORZAR) ===
 ${pabloErrorsText}
 
-=== ERRORES DEL PROPIO MATERIAL / EJEMPLOS DE CLASE (ACLARAR SIN CULPAR AL ALUMNO) ===
+=== ERRORES DEL PROPIO MATERIAL / EJEMPLOS DE CLASE ===
 ${materialErrorsText}
 
 === ERRORES PREVIOS INVOCADOS EXPRESAMENTE POR EL DOCENTE ===
 ${invokedText}`;
+}
+
+function buildConfigBlock(config: GenerationPromptConfig): string {
+  const tiposText =
+    config.tipologias.length > 0
+      ? config.tipologias.join(', ')
+      : 'Variedad equilibrada acorde al tema';
+
+  return `=== PETICIÓN EXACTA DEL DOCENTE PARA ESTA GENERACIÓN ===
+- Cantidad exacta de bloques / ejercicios / ítems solicitada: ${config.cantidad}
+- Tipologías solicitadas: ${tiposText}
+- Incluir dibujos / figuras geométricas / recursos visuales (recurso_visual): ${
+    config.incluirDibujos
+      ? 'SÍ, incluye recurso_visual donde aporte valor visual (ej. fraccion_barra o fraccion_circulo con modo "colorear" para pintar, figura_geometrica, recta_numerica, tabla_datos o svg_libre).'
+      : 'NO es necesario incluir figuras visuales salvo si es imprescindible.'
+  }
+- ${DIFICULTAD_GUIDANCE[config.dificultad]}
+${
+  config.promptLibre.trim()
+    ? `- Instrucción personalizada del docente: ${config.promptLibre.trim()}`
+    : ''
+}`;
 }
 
 export async function analyzeImagesOcr(params: {
@@ -693,16 +732,16 @@ ${params.extraPrompt?.trim() ? `Indicaciones del adulto: ${params.extraPrompt.tr
 
 Tareas del Paso 1:
 1. Identifica el tema concreto de la materia.
-2. Transcribe fielmente todo el contenido visible (texto manuscrito, impreso, ejercicios, operaciones o esquemas).
-3. COMPLECIÓN CURRICULAR (1º ESO Canarias, Decreto 30/2023): detecta qué saberes básicos o explicaciones clave del tema faltan o están incompletos en los apuntes subidos y redáctalos en "contenido_curricular_completado" para completar el tema según el currículo oficial. Añade en "criterios_evaluacion_lomloe" los criterios/saberes oficiales vinculados.
-4. DETECCIÓN DE ERRORES: extrae cualquier fallo, tachón o ejercicio erróneo visible en "errores_detectados". El adulto confirmará luego si cada fallo es realmente de Pablo o pertenece al propio material/libro.
+2. Transcribe fielmente todo el contenido visible (usa LaTeX $...$ para expresiones matemáticas si hay fórmulas).
+3. COMPLECIÓN CURRICULAR (1º ESO Canarias, Decreto 30/2023): detecta qué saberes básicos o explicaciones clave del tema faltan o están incompletos y redáctalos en "contenido_curricular_completado". Añade en "criterios_evaluacion_lomloe" los criterios oficiales vinculados.
+4. DETECCIÓN DE ERRORES: extrae cualquier fallo, tachón o ejercicio erróneo visible en "errores_detectados". El adulto confirmará luego si cada fallo es de Pablo o del propio material.
 5. En "observaciones_legibilidad", señala zonas borrosas o dudas de lectura.`;
 
   const response = await ai.models.generateContent({
     model: GEMINI_MODEL,
     contents: [...fileParts, { text: promptText }],
     config: {
-      systemInstruction: `${CUSTOM_PEDAGOGICAL_SKILL}\n\nEres especialista en transcripción OCR educativa, currículo LOMLOE Canarias (1º ESO) y diagnóstico de errores escolares. No inventes texto ilegible: advierte dudas en observaciones_legibilidad.`,
+      systemInstruction: `${CUSTOM_PEDAGOGICAL_SKILL}\n\nEres especialista en transcripción OCR educativa, currículo LOMLOE Canarias (1º ESO) y diagnóstico de errores escolares.`,
       responseMimeType: 'application/json',
       responseSchema: ocrResponseSchema,
       temperature: 0.2,
@@ -712,144 +751,74 @@ Tareas del Paso 1:
   return parseJsonResponse<RawOcrResponse>(response.text);
 }
 
-interface EsquemaYAndamiajeResponse {
-  esquema_visual: EsquemaVisualData;
-  explicacion_andamiaje: ExplicacionAndamiajeData;
-}
-
-const EVAL_DOC_GUIDANCE: Record<TipoDocumentoEvaluacion, string> = {
-  ficha_refuerzo:
-    'FICHA 1 · NIVEL REFUERZO / BASE: consolidación guiada de conceptos esenciales y errores detectados de Pablo, enunciados muy claros, progresivos, suma 10 puntos.',
-  ficha_estandar:
-    'FICHA 2 · NIVEL ESTÁNDAR / PRÁCTICA: aplicación variada de los saberes básicos del tema con ejercicios procedimentales y de comprensión, suma 10 puntos.',
-  ficha_ampliacion:
-    'FICHA 3 · NIVEL AMPLIACIÓN / COMPETENCIAL: problemas de transferencia, razonamiento en varios pasos y aplicación contextualizada en Canarias, suma 10 puntos.',
-  simulacion_examen:
-    'SIMULACIÓN OFICIAL DE EXAMEN (es_simulacion_examen: true): NO es una ficha de práctica ni tiene pistas; es un examen serio y realista de 1º ESO para comprobar conocimientos, saberes y capacidades según los criterios de evaluación del Decreto 30/2023. Combina preguntas conceptuales, ejercicios de procedimiento y al menos una situación-problema competencial evaluando criterios LOMLOE reales. Suma exacta de 10 puntos.',
-};
-
-export async function generateStudyPack(params: {
+export async function generateEsquemaVisual(params: {
   verification: OcrVerificationData;
   libretaErrores: LibretaErrorDoc[];
-  dificultad?: NivelDificultad;
-}): Promise<GeneratedStudyPack> {
+  config: GenerationPromptConfig;
+}): Promise<EsquemaVisualData> {
   const ai = getGenAIClient();
-  const dificultad = params.dificultad ?? 'estandar';
   const context = buildPedagogicalContext(params.verification, params.libretaErrores);
+  const cfg = buildConfigBlock(params.config);
 
-  const systemInstruction = `${CUSTOM_PEDAGOGICAL_SKILL}\n\nEres un arquitecto instruccional experto en LOMLOE Canarias (Decreto 30/2023, 1º ESO) y ciencia cognitiva del aprendizaje (Active Recall, Dual Coding y Andamiaje). Responde estrictamente con JSON válido ajustado al esquema.`;
+  const prompt = `Genera únicamente el **Esquema Visual** (Dual Coding, ramas conceptuales con LaTeX si aplica, reglas mnemotécnicas y semáforo de errores frecuentes) con exactamente ${params.config.cantidad} ramas conceptuales principales.
 
-  const promptEsquema = `Genera el Esquema Visual (Dual Coding + Mnemotecnia) y la Explicación con Andamiaje (bloques progresivos con preguntas ocultas antes de la solución) para Pablo.
-${DIFICULTAD_GUIDANCE[dificultad]}
-
-${context}`;
-
-  const promptEvaluacion = `Genera las 3 FICHAS graduadas (ficha_refuerzo, ficha_estandar, ficha_ampliacion) y 1 SIMULACIÓN DE EXAMEN OFICIAL (simulacion_examen) para Pablo (1º ESO Canarias, Decreto 30/2023).
-- ${EVAL_DOC_GUIDANCE.ficha_refuerzo} (es_simulacion_examen: false, nivel_etiqueta: "Ficha 1 · Refuerzo")
-- ${EVAL_DOC_GUIDANCE.ficha_estandar} (es_simulacion_examen: false, nivel_etiqueta: "Ficha 2 · Estándar")
-- ${EVAL_DOC_GUIDANCE.ficha_ampliacion} (es_simulacion_examen: false, nivel_etiqueta: "Ficha 3 · Ampliación")
-- ${EVAL_DOC_GUIDANCE.simulacion_examen} (es_simulacion_examen: true, nivel_etiqueta: "Simulación de Examen")
-
-${DIFICULTAD_GUIDANCE[dificultad]}
-Cada ficha y el examen deben sumar exactamente 10 puntos, incluir criterios LOMLOE reales y solucionario docente completo.
+${cfg}
 
 ${context}`;
 
-  const promptMiniApps = `Genera las 4 Mini-Apps táctiles para el iPad de Pablo:
-1. flashcards (6-8 tarjetas Active Recall)
-2. clasificar (2-4 categorías y 6-8 elementos tap-to-place)
-3. trivia_reto (6-8 preguntas con 4 opciones)
-4. caza_error (¡Caza al Error! Detective LOMLOE: 5-7 casos lúdicos con 3-4 afirmaciones cada uno donde Pablo debe cazar la única afirmación con fallo/trampa)
-
-${DIFICULTAD_GUIDANCE[dificultad]}
-
-${context}`;
-
-  const [resEsquema, resEvaluacion, resMiniApps] = await Promise.all([
-    ai.models.generateContent({
-      model: GEMINI_MODEL,
-      contents: [{ text: promptEsquema }],
-      config: {
-        systemInstruction,
-        responseMimeType: 'application/json',
-        responseSchema: esquemaYAndamiajeSchema,
-        temperature: 0.4,
-      },
-    }),
-    ai.models.generateContent({
-      model: GEMINI_MODEL,
-      contents: [{ text: promptEvaluacion }],
-      config: {
-        systemInstruction,
-        responseMimeType: 'application/json',
-        responseSchema: evaluacionYFichasSchema,
-        temperature: 0.45,
-      },
-    }),
-    ai.models.generateContent({
-      model: GEMINI_MODEL,
-      contents: [{ text: promptMiniApps }],
-      config: {
-        systemInstruction,
-        responseMimeType: 'application/json',
-        responseSchema: miniAppsSchema,
-        temperature: 0.5,
-      },
-    }),
-  ]);
-
-  const esquemaPart = parseJsonResponse<EsquemaYAndamiajeResponse>(resEsquema.text);
-  const evaluacionPart = parseJsonResponse<EvaluacionYFichasBundle>(resEvaluacion.text);
-  const miniAppsPart = parseJsonResponse<MiniAppsBundle>(resMiniApps.text);
-
-  return {
-    asignatura: params.verification.asignatura,
-    tema: params.verification.tema,
-    esquema_visual: esquemaPart.esquema_visual,
-    explicacion_andamiaje: esquemaPart.explicacion_andamiaje,
-    evaluacion_y_fichas: {
-      ficha_refuerzo: {
-        ...evaluacionPart.ficha_refuerzo,
-        es_simulacion_examen: false,
-        nivel_etiqueta: evaluacionPart.ficha_refuerzo.nivel_etiqueta || 'Ficha 1 · Refuerzo',
-      },
-      ficha_estandar: {
-        ...evaluacionPart.ficha_estandar,
-        es_simulacion_examen: false,
-        nivel_etiqueta: evaluacionPart.ficha_estandar.nivel_etiqueta || 'Ficha 2 · Estándar',
-      },
-      ficha_ampliacion: {
-        ...evaluacionPart.ficha_ampliacion,
-        es_simulacion_examen: false,
-        nivel_etiqueta:
-          evaluacionPart.ficha_ampliacion.nivel_etiqueta || 'Ficha 3 · Ampliación',
-      },
-      simulacion_examen: {
-        ...evaluacionPart.simulacion_examen,
-        es_simulacion_examen: true,
-        nivel_etiqueta:
-          evaluacionPart.simulacion_examen.nivel_etiqueta || 'Simulación de Examen',
-      },
+  const response = await ai.models.generateContent({
+    model: GEMINI_MODEL,
+    contents: [{ text: prompt }],
+    config: {
+      systemInstruction: `${CUSTOM_PEDAGOGICAL_SKILL}\n\nGenera exclusivamente el JSON del Esquema Visual.`,
+      responseMimeType: 'application/json',
+      responseSchema: esquemaVisualSchema,
+      temperature: 0.4,
     },
-    mini_apps: {
-      flashcards: sanitizeGamePayload(miniAppsPart.flashcards) as FlashcardsPayload,
-      clasificar: sanitizeGamePayload(miniAppsPart.clasificar) as ClasificarPayload,
-      trivia_reto: sanitizeGamePayload(miniAppsPart.trivia_reto) as TriviaRetoPayload,
-      caza_error: sanitizeGamePayload(miniAppsPart.caza_error) as CazaErrorPayload,
-    },
-  };
+  });
+
+  return parseJsonResponse<EsquemaVisualData>(response.text);
 }
 
-export async function regenerateSingleEvaluationDoc(params: {
+export async function generateAndamiaje(params: {
+  verification: OcrVerificationData;
+  libretaErrores: LibretaErrorDoc[];
+  config: GenerationPromptConfig;
+}): Promise<ExplicacionAndamiajeData> {
+  const ai = getGenAIClient();
+  const context = buildPedagogicalContext(params.verification, params.libretaErrores);
+  const cfg = buildConfigBlock(params.config);
+
+  const prompt = `Genera únicamente la **Explicación con Andamiaje** (bloques progresivos breves con anclaje visual, pregunta de verificación y solución oculta) con exactamente ${params.config.cantidad} bloques progresivos y 1 reto integrador final.
+
+${cfg}
+
+${context}`;
+
+  const response = await ai.models.generateContent({
+    model: GEMINI_MODEL,
+    contents: [{ text: prompt }],
+    config: {
+      systemInstruction: `${CUSTOM_PEDAGOGICAL_SKILL}\n\nGenera exclusivamente el JSON de Explicación con Andamiaje.`,
+      responseMimeType: 'application/json',
+      responseSchema: andamiajeSchema,
+      temperature: 0.4,
+    },
+  });
+
+  return parseJsonResponse<ExplicacionAndamiajeData>(response.text);
+}
+
+export async function generateSingleEvaluationDoc(params: {
   tipoDoc: TipoDocumentoEvaluacion;
   verification: OcrVerificationData;
   libretaErrores: LibretaErrorDoc[];
+  config: GenerationPromptConfig;
   currentDoc?: ExamenPdfData;
-  dificultad?: NivelDificultad;
 }): Promise<ExamenPdfData> {
   const ai = getGenAIClient();
-  const dificultad = params.dificultad ?? 'estandar';
   const context = buildPedagogicalContext(params.verification, params.libretaErrores);
+  const cfg = buildConfigBlock(params.config);
 
   const previousQuestionsNote = params.currentDoc
     ? `\nPreguntas anteriores a NO repetir literalmente:\n${params.currentDoc.preguntas
@@ -857,9 +826,10 @@ export async function regenerateSingleEvaluationDoc(params: {
         .join('\n')}`
     : '';
 
-  const prompt = `Genera una NUEVA versión fresca con preguntas distintas de este documento de evaluación:
+  const prompt = `Genera un documento de evaluación con exactamente ${params.config.cantidad} preguntas/ejercicios cuya puntuación sume 10 puntos en total:
 ${EVAL_DOC_GUIDANCE[params.tipoDoc]}
-${DIFICULTAD_GUIDANCE[dificultad]}
+
+${cfg}
 ${previousQuestionsNote}
 
 ${context}`;
@@ -868,10 +838,10 @@ ${context}`;
     model: GEMINI_MODEL,
     contents: [{ text: prompt }],
     config: {
-      systemInstruction: `${CUSTOM_PEDAGOGICAL_SKILL}\n\nEres especialista en evaluación LOMLOE Canarias (1º ESO, Decreto 30/2023). Genera ejercicios y criterios nuevos manteniendo el nivel exacto solicitado.`,
+      systemInstruction: `${CUSTOM_PEDAGOGICAL_SKILL}\n\nEres especialista en evaluación LOMLOE Canarias (1º ESO). Devuelve JSON válido exacto.`,
       responseMimeType: 'application/json',
       responseSchema: fichaOExamenSchema,
-      temperature: 0.65,
+      temperature: 0.5,
     },
   });
 
@@ -882,121 +852,15 @@ ${context}`;
   };
 }
 
-export async function iterateStudyPack(params: {
-  currentPack: GeneratedStudyPack;
-  verification: OcrVerificationData;
-  libretaErrores: LibretaErrorDoc[];
-  targetDificultad: NivelDificultad;
-  instruccionCambio: string;
-}): Promise<GeneratedStudyPack> {
-  const ai = getGenAIClient();
-  const context = buildPedagogicalContext(params.verification, params.libretaErrores);
-  const systemInstruction = `${CUSTOM_PEDAGOGICAL_SKILL}\n\nEres un arquitecto instruccional experto en LOMLOE Canarias (1º ESO). Evoluciona el artefacto existente manteniendo coherencia entre todas sus partes.`;
-
-  const baseChangeBlock = `=== NIVEL DE DIFICULTAD OBJETIVO ===
-${DIFICULTAD_GUIDANCE[params.targetDificultad]}
-
-=== CAMBIOS SOLICITADOS POR EL DOCENTE / PADRE ===
-${params.instruccionCambio.trim() || 'Ajustar el material al nuevo nivel de dificultad manteniendo la consistencia global.'}
-
-${context}`;
-
-  const promptEsquema = `Itera sobre el Esquema Visual y el Andamiaje actuales manteniendo consistencia con los cambios pedidos:
-Esquema y Andamiaje actuales: ${JSON.stringify({
-    esquema_visual: params.currentPack.esquema_visual,
-    explicacion_andamiaje: params.currentPack.explicacion_andamiaje,
-  })}
-
-${baseChangeBlock}`;
-
-  const promptEvaluacion = `Itera sobre las 3 Fichas y la Simulación de Examen actuales aplicando los cambios pedidos y manteniendo consistencia:
-Evaluación actual: ${JSON.stringify(params.currentPack.evaluacion_y_fichas)}
-
-${baseChangeBlock}`;
-
-  const promptMiniApps = `Itera sobre las 4 Mini-Apps actuales (flashcards, clasificar, trivia_reto, caza_error) aplicando los cambios pedidos y manteniendo consistencia:
-Mini-Apps actuales: ${JSON.stringify(params.currentPack.mini_apps)}
-
-${baseChangeBlock}`;
-
-  const [resEsquema, resEvaluacion, resMiniApps] = await Promise.all([
-    ai.models.generateContent({
-      model: GEMINI_MODEL,
-      contents: [{ text: promptEsquema }],
-      config: {
-        systemInstruction,
-        responseMimeType: 'application/json',
-        responseSchema: esquemaYAndamiajeSchema,
-        temperature: 0.45,
-      },
-    }),
-    ai.models.generateContent({
-      model: GEMINI_MODEL,
-      contents: [{ text: promptEvaluacion }],
-      config: {
-        systemInstruction,
-        responseMimeType: 'application/json',
-        responseSchema: evaluacionYFichasSchema,
-        temperature: 0.45,
-      },
-    }),
-    ai.models.generateContent({
-      model: GEMINI_MODEL,
-      contents: [{ text: promptMiniApps }],
-      config: {
-        systemInstruction,
-        responseMimeType: 'application/json',
-        responseSchema: miniAppsSchema,
-        temperature: 0.5,
-      },
-    }),
-  ]);
-
-  const esquemaPart = parseJsonResponse<EsquemaYAndamiajeResponse>(resEsquema.text);
-  const evaluacionPart = parseJsonResponse<EvaluacionYFichasBundle>(resEvaluacion.text);
-  const miniAppsPart = parseJsonResponse<MiniAppsBundle>(resMiniApps.text);
-
-  return {
-    asignatura: params.verification.asignatura,
-    tema: params.verification.tema,
-    esquema_visual: esquemaPart.esquema_visual,
-    explicacion_andamiaje: esquemaPart.explicacion_andamiaje,
-    evaluacion_y_fichas: {
-      ficha_refuerzo: {
-        ...evaluacionPart.ficha_refuerzo,
-        es_simulacion_examen: false,
-      },
-      ficha_estandar: {
-        ...evaluacionPart.ficha_estandar,
-        es_simulacion_examen: false,
-      },
-      ficha_ampliacion: {
-        ...evaluacionPart.ficha_ampliacion,
-        es_simulacion_examen: false,
-      },
-      simulacion_examen: {
-        ...evaluacionPart.simulacion_examen,
-        es_simulacion_examen: true,
-      },
-    },
-    mini_apps: {
-      flashcards: sanitizeGamePayload(miniAppsPart.flashcards) as FlashcardsPayload,
-      clasificar: sanitizeGamePayload(miniAppsPart.clasificar) as ClasificarPayload,
-      trivia_reto: sanitizeGamePayload(miniAppsPart.trivia_reto) as TriviaRetoPayload,
-      caza_error: sanitizeGamePayload(miniAppsPart.caza_error) as CazaErrorPayload,
-    },
-  };
-}
-
-export async function regenerateSingleMiniApp(params: {
+export async function generateSingleMiniApp(params: {
   tipoJuego: TipoJuego;
   verification: OcrVerificationData;
   libretaErrores: LibretaErrorDoc[];
-  dificultad?: NivelDificultad;
+  config: GenerationPromptConfig;
 }): Promise<GamePayload> {
   const ai = getGenAIClient();
-  const dificultad = params.dificultad ?? 'estandar';
   const context = buildPedagogicalContext(params.verification, params.libretaErrores);
+  const cfg = buildConfigBlock(params.config);
 
   const effectiveTipo =
     params.tipoJuego === 'ordenar_pasos' ? 'caza_error' : params.tipoJuego;
@@ -1011,9 +875,9 @@ export async function regenerateSingleMiniApp(params: {
     caza_error: cazaErrorSchema,
   };
 
-  const prompt = `Genera una NUEVA versión amena, variada y divertida de la mini-app "${effectiveTipo}" para Pablo (1º ESO Canarias, Decreto 30/2023).
-${DIFICULTAD_GUIDANCE[dificultad]}
-Evita repetir exactamente las preguntas anteriores; formula retos frescos.
+  const prompt = `Genera una mini-app interactiva de tipo "${effectiveTipo}" con exactamente ${params.config.cantidad} ítems/tarjetas/elementos/casos adaptada a iPad (1º ESO Canarias).
+
+${cfg}
 
 ${context}`;
 
@@ -1024,10 +888,131 @@ ${context}`;
       systemInstruction: `${CUSTOM_PEDAGOGICAL_SKILL}\n\nEres diseñador de microjuegos educativos táctiles para iPad en 1º ESO.`,
       responseMimeType: 'application/json',
       responseSchema: schemaByType[effectiveTipo],
-      temperature: 0.7,
+      temperature: 0.6,
     },
   });
 
   const parsed = parseJsonResponse<GamePayload>(response.text);
   return sanitizeGamePayload(parsed);
 }
+
+/**
+ * Itera de forma consistente únicamente sobre las secciones del artefacto que ya existen.
+ */
+export async function iterateStudyPack(params: {
+  currentPack: GeneratedStudyPack;
+  verification: OcrVerificationData;
+  libretaErrores: LibretaErrorDoc[];
+  targetDificultad: NivelDificultad;
+  instruccionCambio: string;
+}): Promise<GeneratedStudyPack> {
+  const baseConfig: GenerationPromptConfig = {
+    cantidad: 6,
+    tipologias: ['Coherente con la iteración solicitada'],
+    incluirDibujos: true,
+    dificultad: params.targetDificultad,
+    promptLibre: `Iteración sobre artefacto existente: ${
+      params.instruccionCambio.trim() || 'Ajustar dificultad manteniendo consistencia global.'
+    }`,
+  };
+
+  const nextPack: GeneratedStudyPack = {
+    asignatura: params.verification.asignatura,
+    tema: params.verification.tema,
+    evaluacion_y_fichas: { ...params.currentPack.evaluacion_y_fichas },
+    mini_apps: { ...params.currentPack.mini_apps },
+  };
+
+  const tasks: Array<Promise<void>> = [];
+
+  if (params.currentPack.esquema_visual) {
+    tasks.push(
+      generateEsquemaVisual({
+        verification: params.verification,
+        libretaErrores: params.libretaErrores,
+        config: {
+          ...baseConfig,
+          cantidad: Math.max(4, params.currentPack.esquema_visual.ramas.length),
+        },
+      }).then((res) => {
+        nextPack.esquema_visual = res;
+      }),
+    );
+  }
+
+  if (params.currentPack.explicacion_andamiaje) {
+    tasks.push(
+      generateAndamiaje({
+        verification: params.verification,
+        libretaErrores: params.libretaErrores,
+        config: {
+          ...baseConfig,
+          cantidad: Math.max(4, params.currentPack.explicacion_andamiaje.bloques.length),
+        },
+      }).then((res) => {
+        nextPack.explicacion_andamiaje = res;
+      }),
+    );
+  }
+
+  const evalKeys: TipoDocumentoEvaluacion[] = [
+    'ficha_refuerzo',
+    'ficha_estandar',
+    'ficha_ampliacion',
+    'simulacion_examen',
+  ];
+
+  for (const key of evalKeys) {
+    const existingDoc = params.currentPack.evaluacion_y_fichas[key];
+    if (existingDoc) {
+      tasks.push(
+        generateSingleEvaluationDoc({
+          tipoDoc: key,
+          verification: params.verification,
+          libretaErrores: params.libretaErrores,
+          currentDoc: existingDoc,
+          config: {
+            ...baseConfig,
+            cantidad: Math.max(4, existingDoc.preguntas.length),
+          },
+        }).then((res) => {
+          nextPack.evaluacion_y_fichas[key] = res;
+        }),
+      );
+    }
+  }
+
+  const gameKeys: Array<keyof MiniAppsBundle> = [
+    'flashcards',
+    'clasificar',
+    'trivia_reto',
+    'caza_error',
+  ];
+
+  for (const key of gameKeys) {
+    const existingGame = params.currentPack.mini_apps[key];
+    if (existingGame) {
+      tasks.push(
+        generateSingleMiniApp({
+          tipoJuego: key,
+          verification: params.verification,
+          libretaErrores: params.libretaErrores,
+          config: baseConfig,
+        }).then((res) => {
+          if (res.tipo_juego === 'flashcards') nextPack.mini_apps.flashcards = res;
+          else if (res.tipo_juego === 'clasificar') nextPack.mini_apps.clasificar = res;
+          else if (res.tipo_juego === 'trivia_reto') nextPack.mini_apps.trivia_reto = res;
+          else if (res.tipo_juego === 'caza_error') nextPack.mini_apps.caza_error = res;
+        }),
+      );
+    }
+  }
+
+  if (tasks.length > 0) {
+    await Promise.all(tasks);
+  }
+
+  return nextPack;
+}
+
+export type { EvaluacionYFichasBundle };

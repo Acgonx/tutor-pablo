@@ -10,6 +10,8 @@ import {
 } from 'lucide-react';
 import type { FalloEnPartida, InteraccionPartida } from '../../types/firestore';
 import type { CazaErrorPayload, GameCompletionResult } from '../../types/studyMaterial';
+import { MathText } from '../common/MathText';
+import { VisualFigureRenderer } from '../common/VisualFigureRenderer';
 
 interface CazaErrorGameProps {
   payload: CazaErrorPayload;
@@ -130,8 +132,14 @@ export function CazaErrorGame({ payload, onComplete }: CazaErrorGameProps) {
         <p className="text-xs font-bold tracking-wide text-indigo-700 uppercase">
           Misión de detective: toca la única afirmación con trampa o error
         </p>
-        <h3 className="mt-1 text-lg font-bold text-slate-900">{caso.contexto}</h3>
+        <h3 className="mt-1 text-lg font-bold text-slate-900">
+          <MathText text={caso.contexto} />
+        </h3>
       </div>
+
+      {caso.recurso_visual && (
+        <VisualFigureRenderer spec={caso.recurso_visual} showSolution={hasAnswered} />
+      )}
 
       <div className="space-y-2.5">
         {caso.afirmaciones.map((statement, optIndex) => {
@@ -162,7 +170,9 @@ export function CazaErrorGame({ payload, onComplete }: CazaErrorGameProps) {
                 <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-xs font-extrabold text-slate-700">
                   {optIndex + 1}
                 </span>
-                <span>{statement}</span>
+                <span>
+                  <MathText text={statement} />
+                </span>
               </span>
 
               {hasAnswered && optIndex === caso.indice_error && (
@@ -192,7 +202,9 @@ export function CazaErrorGame({ payload, onComplete }: CazaErrorGameProps) {
                 ? '¡Trampa cazada! Ojo de detective.'
                 : '¡Esa era correcta! La trampa estaba en la opción marcada en amarillo.'}
             </p>
-            <p className="mt-1">{caso.explicacion_correccion}</p>
+            <p className="mt-1">
+              <MathText text={caso.explicacion_correccion} />
+            </p>
           </div>
 
           <button

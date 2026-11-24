@@ -58,6 +58,15 @@ export function StudentSessionPage() {
           setLoadError('Esta sesión no existe o fue eliminada.');
         } else {
           setSesion(fetched);
+          if (!fetched.esquema_visual && fetched.explicacion_andamiaje) {
+            setActiveTab('andamiaje');
+          } else if (
+            !fetched.esquema_visual &&
+            !fetched.explicacion_andamiaje &&
+            Object.values(fetched.mini_apps).some(Boolean)
+          ) {
+            setActiveTab('juegos');
+          }
         }
       } catch (error) {
         if (cancelled) return;
@@ -79,6 +88,12 @@ export function StudentSessionPage() {
     };
   }, [id]);
 
+  const availableGames: TipoJuego[] = sesion
+    ? (['flashcards', 'clasificar', 'trivia_reto', 'caza_error', 'ordenar_pasos'] as TipoJuego[]).filter(
+        (k) => Boolean(sesion.mini_apps[k]),
+      )
+    : [];
+
   return (
     <div className="min-h-screen bg-slate-100 px-4 py-6 text-slate-900">
       <div className="mx-auto max-w-4xl space-y-5">
@@ -99,42 +114,48 @@ export function StudentSessionPage() {
 
           {sesion && (
             <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => setActiveTab('esquema')}
-                className={`inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-bold ${
-                  activeTab === 'esquema'
-                    ? 'bg-indigo-600 text-white'
-                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                }`}
-              >
-                <GitBranch className="h-4 w-4" />
-                Esquema
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveTab('andamiaje')}
-                className={`inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-bold ${
-                  activeTab === 'andamiaje'
-                    ? 'bg-indigo-600 text-white'
-                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                }`}
-              >
-                <Layers className="h-4 w-4" />
-                Andamiaje
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveTab('juegos')}
-                className={`inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-bold ${
-                  activeTab === 'juegos'
-                    ? 'bg-indigo-600 text-white'
-                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                }`}
-              >
-                <Gamepad2 className="h-4 w-4" />
-                Mini-Apps
-              </button>
+              {sesion.esquema_visual && (
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('esquema')}
+                  className={`inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-bold ${
+                    activeTab === 'esquema'
+                      ? 'bg-indigo-600 text-white'
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  }`}
+                >
+                  <GitBranch className="h-4 w-4" />
+                  Esquema
+                </button>
+              )}
+              {sesion.explicacion_andamiaje && (
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('andamiaje')}
+                  className={`inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-bold ${
+                    activeTab === 'andamiaje'
+                      ? 'bg-indigo-600 text-white'
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  }`}
+                >
+                  <Layers className="h-4 w-4" />
+                  Andamiaje
+                </button>
+              )}
+              {availableGames.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('juegos')}
+                  className={`inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-bold ${
+                    activeTab === 'juegos'
+                      ? 'bg-indigo-600 text-white'
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  }`}
+                >
+                  <Gamepad2 className="h-4 w-4" />
+                  Mini-Apps
+                </button>
+              )}
             </div>
           )}
         </header>
@@ -158,7 +179,7 @@ export function StudentSessionPage() {
 
         {!isLoading && !loadError && sesion && (
           <>
-            {activeTab === 'esquema' && (
+            {activeTab === 'esquema' && sesion.esquema_visual && (
               <EsquemaVisualTab
                 asignatura={sesion.asignatura}
                 tema={sesion.tema}
@@ -166,34 +187,27 @@ export function StudentSessionPage() {
               />
             )}
 
-            {activeTab === 'andamiaje' && (
+            {activeTab === 'andamiaje' && sesion.explicacion_andamiaje && (
               <AndamiajeTab data={sesion.explicacion_andamiaje} />
             )}
 
-            {activeTab === 'juegos' && (() => {
-              const availableTypes: TipoJuego[] = [
-                'flashcards',
-                'clasificar',
-                'trivia_reto',
-                ...(sesion.mini_apps.caza_error ? (['caza_error'] as TipoJuego[]) : []),
-                ...(sesion.mini_apps.ordenar_pasos
-                  ? (['ordenar_pasos'] as TipoJuego[])
-                  : []),
-              ];
-              const currentPayload =
-                sesion.mini_apps[selectedGame as keyof typeof sesion.mini_apps] ??
-                sesion.mini_apps.flashcards;
+            {activeTab === 'juegos' && availableGames.length > 0 && (() => {
+              const activeGameKey = availableGames.includes(selectedGame)
+                ? selectedGame
+                : availableGames[0];
+              const currentPayload = sesion.mini_apps[activeGameKey];
+              if (!currentPayload) return null;
 
               return (
                 <div className="space-y-4">
                   <div className="flex flex-wrap gap-2">
-                    {availableTypes.map((tipo) => (
+                    {availableGames.map((tipo) => (
                       <button
                         key={tipo}
                         type="button"
                         onClick={() => setSelectedGame(tipo)}
                         className={`rounded-xl px-4 py-2.5 text-sm font-bold ${
-                          selectedGame === tipo
+                          activeGameKey === tipo
                             ? 'bg-indigo-600 text-white shadow-xs'
                             : 'bg-white text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50'
                         }`}
@@ -203,15 +217,13 @@ export function StudentSessionPage() {
                     ))}
                   </div>
 
-                  {currentPayload && (
-                    <GameRenderer
-                      key={selectedGame}
-                      asignatura={sesion.asignatura}
-                      titulo={currentPayload.titulo}
-                      payload={currentPayload}
-                      mode="preview"
-                    />
-                  )}
+                  <GameRenderer
+                    key={activeGameKey}
+                    asignatura={sesion.asignatura}
+                    titulo={currentPayload.titulo}
+                    payload={currentPayload}
+                    mode="preview"
+                  />
                 </div>
               );
             })()}

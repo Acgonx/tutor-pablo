@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { ArrowRight, CheckCircle2, Flame, HelpCircle, Sparkles, XCircle } from 'lucide-react';
 import type { FalloEnPartida, InteraccionPartida } from '../../types/firestore';
 import type { GameCompletionResult, TriviaRetoPayload } from '../../types/studyMaterial';
+import { MathText } from '../common/MathText';
+import { VisualFigureRenderer } from '../common/VisualFigureRenderer';
 
 interface TriviaRetoGameProps {
   payload: TriviaRetoPayload;
@@ -111,7 +113,16 @@ export function TriviaRetoGame({ payload, onComplete }: TriviaRetoGameProps) {
         />
       </div>
 
-      <h3 className="text-lg font-bold text-slate-900 sm:text-xl">{question.pregunta}</h3>
+      <h3 className="text-lg font-bold text-slate-900 sm:text-xl">
+        <MathText text={question.pregunta} />
+      </h3>
+
+      {question.recurso_visual && (
+        <VisualFigureRenderer
+          spec={question.recurso_visual}
+          showSolution={hasAnswered}
+        />
+      )}
 
       <div className="space-y-2.5">
         {question.opciones.map((option, optIndex) => {
@@ -140,7 +151,9 @@ export function TriviaRetoGame({ payload, onComplete }: TriviaRetoGameProps) {
                 <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-sm font-bold text-slate-700">
                   {OPTION_LETTERS[optIndex] ?? optIndex + 1}
                 </span>
-                <span>{option}</span>
+                <span>
+                  <MathText text={option} />
+                </span>
               </span>
               {hasAnswered && optIndex === question.indice_correcto && (
                 <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-600" />
@@ -167,7 +180,7 @@ export function TriviaRetoGame({ payload, onComplete }: TriviaRetoGameProps) {
           </button>
           {showHint && (
             <div className="rounded-xl border border-amber-200 bg-amber-50 p-3.5 text-sm text-amber-900">
-              {question.pista}
+              <MathText text={question.pista} />
             </div>
           )}
         </div>
@@ -185,7 +198,9 @@ export function TriviaRetoGame({ payload, onComplete }: TriviaRetoGameProps) {
             <p className="font-bold">
               {isCorrect ? '¡Respuesta correcta!' : 'No era esa opción.'}
             </p>
-            <p className="mt-1">{question.explicacion}</p>
+            <p className="mt-1">
+              <MathText text={question.explicacion} />
+            </p>
           </div>
 
           <button

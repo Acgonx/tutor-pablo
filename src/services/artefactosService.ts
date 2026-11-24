@@ -55,15 +55,15 @@ function buildFallbackFicha(base: ExamenPdfData, label: string, isExam: boolean)
 }
 
 /**
- * Hidrata artefactos antiguos (que tenían examen_pdf único u ordenar_pasos)
- * al formato actual sin perder compatibilidad.
+ * Hidrata artefactos (tanto parciales generados bajo demanda como completos/legados)
+ * manteniendo compatibilidad sin exigir todas las pestañas rellenas.
  */
 function hydrateStudyPack(rawPack: Record<string, unknown>): GeneratedStudyPack {
   const legacyExam = rawPack.examen_pdf as ExamenPdfData | undefined;
-  const rawEval = rawPack.evaluacion_y_fichas as EvaluacionYFichasBundle | undefined;
+  const rawEval = (rawPack.evaluacion_y_fichas ?? {}) as EvaluacionYFichasBundle;
 
   let evaluacionYFichas: EvaluacionYFichasBundle;
-  if (rawEval && rawEval.simulacion_examen && rawEval.ficha_refuerzo) {
+  if (rawPack.evaluacion_y_fichas && typeof rawPack.evaluacion_y_fichas === 'object') {
     evaluacionYFichas = rawEval;
   } else if (legacyExam) {
     evaluacionYFichas = {
@@ -73,29 +73,37 @@ function hydrateStudyPack(rawPack: Record<string, unknown>): GeneratedStudyPack 
       simulacion_examen: buildFallbackFicha(legacyExam, 'Simulación de Examen', true),
     };
   } else {
-    throw new Error('El artefacto no contiene datos de fichas ni examen.');
+    evaluacionYFichas = {};
   }
 
   const rawMiniApps = (rawPack.mini_apps ?? {}) as Record<string, unknown>;
-  const cazaError = (rawMiniApps.caza_error as GeneratedStudyPack['mini_apps']['caza_error'] | undefined) ?? {
-    tipo_juego: 'caza_error' as const,
-    titulo: '¡Caza al Error!',
-    instrucciones: 'Pulsa «Regenerar actividad» para generar casos de detective para este tema.',
-    casos: [],
-  };
 
   return {
     asignatura: typeof rawPack.asignatura === 'string' ? rawPack.asignatura : '',
     tema: typeof rawPack.tema === 'string' ? rawPack.tema : '',
-    esquema_visual: rawPack.esquema_visual as GeneratedStudyPack['esquema_visual'],
-    explicacion_andamiaje:
-      rawPack.explicacion_andamiaje as GeneratedStudyPack['explicacion_andamiaje'],
+    esquema_visual: rawPack.esquema_visual as
+      | GeneratedStudyPack['esquema_visual']
+      | undefined,
+    explicacion_andamiaje: rawPack.explicacion_andamiaje as
+      | GeneratedStudyPack['explicacion_andamiaje']
+      | undefined,
     evaluacion_y_fichas: evaluacionYFichas,
     mini_apps: {
-      flashcards: rawMiniApps.flashcards as GeneratedStudyPack['mini_apps']['flashcards'],
-      clasificar: rawMiniApps.clasificar as GeneratedStudyPack['mini_apps']['clasificar'],
-      trivia_reto: rawMiniApps.trivia_reto as GeneratedStudyPack['mini_apps']['trivia_reto'],
-      caza_error: cazaError,
+      flashcards: rawMiniApps.flashcards as
+        | GeneratedStudyPack['mini_apps']['flashcards']
+        | undefined,
+      clasificar: rawMiniApps.clasificar as
+        | GeneratedStudyPack['mini_apps']['clasificar']
+        | undefined,
+      trivia_reto: rawMiniApps.trivia_reto as
+        | GeneratedStudyPack['mini_apps']['trivia_reto']
+        | undefined,
+      caza_error: rawMiniApps.caza_error as
+        | GeneratedStudyPack['mini_apps']['caza_error']
+        | undefined,
+      ordenar_pasos: rawMiniApps.ordenar_pasos as
+        | GeneratedStudyPack['mini_apps']['ordenar_pasos']
+        | undefined,
     },
   };
 }
@@ -192,7 +200,7 @@ function mapDocToArtefacto(id: string, data: Record<string, unknown>): Artefacto
     titulo:
       typeof data.titulo === 'string'
         ? data.titulo
-        : studyPack.esquema_visual.titulo_central || studyPack.tema,
+        : studyPack.esquema_visual?.titulo_central || studyPack.tema,
     dificultad: normalizeDificultad(data.dificultad),
     estado: normalizeEstadoArtefacto(data.estado),
     version: typeof data.version === 'number' ? data.version : 1,
@@ -222,7 +230,7 @@ export async function createArtefacto(params: {
   const db = requireDb();
   const now = Timestamp.now();
   const isoNow = now.toDate().toISOString();
-  const titulo = params.studyPack.esquema_visual.titulo_central || params.tema;
+  const titulo = params.studyPack.esquema_visual?.titulo_central || params.tema;
 
   const initialHistory: ArtefactoIteracion[] = [
     {
@@ -279,7 +287,7 @@ export async function updateArtefactoIteration(params: {
   const isoNow = now.toDate().toISOString();
   const nextVersion = params.artefacto.version + 1;
   const nextTitulo =
-    params.nextStudyPack.esquema_visual.titulo_central || params.nextStudyPack.tema;
+    params.nextStudyPack.esquema_visual?.titulo_central || params.nextStudyPack.tema;
 
   const nextHistory: ArtefactoIteracion[] = [
     ...params.artefacto.historial_iteraciones,

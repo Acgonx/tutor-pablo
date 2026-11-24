@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { Check, HelpCircle, RotateCw, Sparkles, X } from 'lucide-react';
 import type { FalloEnPartida, InteraccionPartida } from '../../types/firestore';
 import type { FlashcardsPayload, GameCompletionResult } from '../../types/studyMaterial';
+import { MathText } from '../common/MathText';
+import { VisualFigureRenderer } from '../common/VisualFigureRenderer';
 
 interface FlashcardsGameProps {
   payload: FlashcardsPayload;
@@ -110,11 +112,16 @@ export function FlashcardsGame({ payload, onComplete }: FlashcardsGameProps) {
           {flipped ? 'Respuesta (toca para girar)' : 'Pregunta (toca para revelar)'}
         </span>
         <p className="text-lg font-bold text-slate-900 sm:text-xl">
-          {flipped ? card.reverso : card.frente}
+          <MathText text={flipped ? card.reverso : card.frente} />
         </p>
+        {card.recurso_visual && (
+          <div className="mt-3 w-full max-w-md" onClick={(ev) => ev.stopPropagation()}>
+            <VisualFigureRenderer spec={card.recurso_visual} showSolution={flipped} />
+          </div>
+        )}
         {flipped && card.concepto_clave && (
           <span className="mt-4 rounded-full bg-white/90 px-3 py-1 text-xs font-semibold text-slate-600 ring-1 ring-slate-200">
-            Concepto clave: {card.concepto_clave}
+            Concepto clave: <MathText text={card.concepto_clave} />
           </span>
         )}
       </button>
@@ -131,7 +138,7 @@ export function FlashcardsGame({ payload, onComplete }: FlashcardsGameProps) {
           </button>
           {showHint && (
             <div className="rounded-xl border border-amber-200 bg-amber-50 p-3.5 text-sm text-amber-900">
-              {card.pista}
+              <MathText text={card.pista} />
             </div>
           )}
         </div>

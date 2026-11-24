@@ -278,6 +278,75 @@ export function buildStandaloneHtml(params: {
           .replace(/"/g, '&quot;');
       }
 
+      function fmtMath(str) {
+        var s = esc(str);
+        s = s.replace(/\\$\\$([\\s\\S]+?)\\$\\$|\\$([^$\\n]+?)\\$/g, function (_, d, i) {
+          var expr = (d || i || '').trim();
+          expr = expr
+            .replace(/\\\\frac\\{([^{}]+)\\}\\{([^{}]+)\\}/g, '$1/$2')
+            .replace(/\\\\sqrt\\{([^{}]+)\\}/g, '√($1)')
+            .replace(/\\\\times/g, '×')
+            .replace(/\\\\cdot/g, '·')
+            .replace(/\\\\div/g, '÷')
+            .replace(/\\\\pi/g, 'π')
+            .replace(/\\\\circ/g, '°')
+            .replace(/\\\\leq/g, '≤')
+            .replace(/\\\\geq/g, '≥')
+            .replace(/\\\\neq/g, '≠')
+            .replace(/\\\\text\\{([^{}]+)\\}/g, '$1')
+            .replace(/\\^2/g, '²')
+            .replace(/\\^3/g, '³');
+          return '<span style="font-weight:700;color:#1e1b4b">' + expr + '</span>';
+        });
+        return s;
+      }
+
+      function renderVisual(spec, showSol) {
+        if (!spec || !spec.tipo) return '';
+        var shaded = spec.modo === 'lectura' || Boolean(showSol);
+        var inner = '';
+        if (spec.tipo === 'fraccion_barra') {
+          var den = Math.max(1, Math.min(24, Number(spec.denominador || 4)));
+          var num = shaded ? Math.max(0, Math.min(den, Number(spec.numerador || 0))) : 0;
+          var w = 36;
+          var svgW = den * w + 12;
+          inner = '<svg viewBox="0 0 ' + svgW + ' 56" style="max-width:100%;height:64px">';
+          for (var i = 0; i < den; i++) {
+            inner += '<rect x="' + (6 + i * w) + '" y="6" width="' + w + '" height="40" fill="' + (i < num ? '#818cf8' : '#fff') + '" stroke="#1e293b" stroke-width="2" />';
+          }
+          inner += '</svg>';
+        } else if (spec.tipo === 'fraccion_circulo') {
+          var cDen = Math.max(2, Math.min(24, Number(spec.denominador || 4)));
+          var cNum = shaded ? Math.max(0, Math.min(cDen, Number(spec.numerador || 0))) : 0;
+          var r = 60, cx = 75, cy = 75;
+          inner = '<svg viewBox="0 0 150 150" style="width:120px;height:120px">';
+          for (var k = 0; k < cDen; k++) {
+            var a1 = (k * 2 * Math.PI) / cDen - Math.PI / 2;
+            var a2 = ((k + 1) * 2 * Math.PI) / cDen - Math.PI / 2;
+            var x1 = cx + r * Math.cos(a1), y1 = cy + r * Math.sin(a1);
+            var x2 = cx + r * Math.cos(a2), y2 = cy + r * Math.sin(a2);
+            var la = (2 * Math.PI) / cDen > Math.PI ? 1 : 0;
+            inner += '<path d="M ' + cx + ' ' + cy + ' L ' + x1.toFixed(1) + ' ' + y1.toFixed(1) + ' A ' + r + ' ' + r + ' 0 ' + la + ' 1 ' + x2.toFixed(1) + ' ' + y2.toFixed(1) + ' Z" fill="' + (k < cNum ? '#818cf8' : '#fff') + '" stroke="#1e293b" stroke-width="2" />';
+          }
+          inner += '</svg>';
+        } else if (spec.tipo === 'figura_geometrica') {
+          var f = spec.forma || 'rectangulo';
+          inner = '<svg viewBox="0 0 220 120" style="width:180px;height:100px">';
+          if (f === 'cuadrado') inner += '<rect x="65" y="15" width="90" height="90" fill="#eef2ff" stroke="#1e293b" stroke-width="2.5"/>';
+          else if (f === 'triangulo') inner += '<polygon points="110,15 35,105 185,105" fill="#eef2ff" stroke="#1e293b" stroke-width="2.5"/>';
+          else if (f === 'circulo') inner += '<circle cx="110" cy="60" r="45" fill="#eef2ff" stroke="#1e293b" stroke-width="2.5"/>';
+          else inner += '<rect x="30" y="25" width="160" height="70" fill="#eef2ff" stroke="#1e293b" stroke-width="2.5"/>';
+          inner += '</svg>';
+          if (spec.medidas && spec.medidas.length) {
+            inner += '<div style="font-size:12px;margin-top:4px">' + spec.medidas.map(function (m) { return '<strong>' + esc(m.etiqueta) + ':</strong> ' + esc(m.valor); }).join(' · ') + '</div>';
+          }
+        }
+        if (!inner) return '';
+        return '<div style="margin:12px 0;padding:10px;border:1px solid #cbd5e1;border-radius:12px;background:#f8fafc;text-align:center">' +
+          (spec.titulo ? '<div style="font-size:12px;font-weight:700;margin-bottom:6px">' + esc(spec.titulo) + '</div>' : '') +
+          inner + '</div>';
+      }
+
       function shuffleDiff(items) {
         var arr = items.slice();
         if (arr.length < 2) return arr;
@@ -346,7 +415,8 @@ export function buildStandaloneHtml(params: {
               '<div style="font-size:12px;font-weight:700;text-transform:uppercase;color:#475569;margin-bottom:8px">' +
                 (flipped ? 'Respuesta' : 'Toca la tarjeta para ver la respuesta') +
               '</div>' +
-              '<div style="font-size:20px;font-weight:700">' + esc(flipped ? card.reverso : card.frente) + '</div>' +
+              '<div style="font-size:20px;font-weight:700">' + fmtMath(flipped ? card.reverso : card.frente) + '</div>' +
+              (card.recurso_visual ? renderVisual(card.recurso_visual, flipped) : '') +
             '</div>' +
             (!flipped && card.pista ? (
               '<div style="margin-top:12px"><button id="fc-hint-btn" class="btn-secondary" style="width:100%">' +
@@ -513,7 +583,8 @@ export function buildStandaloneHtml(params: {
           var html = '<div class="progress-wrap"><span>Pregunta ' + (idx + 1) + ' de ' + qs.length + '</span>' +
             (q.es_repaso_libreta ? '<span class="badge badge-repaso">Repaso Libreta</span>' : '') + '</div>' +
             '<div class="progress-bar"><div class="progress-fill" style="width:' + pct + '%"></div></div>' +
-            '<h2 style="margin:0 0 16px;font-size:20px">' + esc(q.pregunta) + '</h2>';
+            '<h2 style="margin:0 0 16px;font-size:20px">' + fmtMath(q.pregunta) + '</h2>' +
+            (q.recurso_visual ? renderVisual(q.recurso_visual, chosen !== null) : '');
 
           q.opciones.forEach(function (opt, i) {
             var cls = 'option-btn';
@@ -522,7 +593,7 @@ export function buildStandaloneHtml(params: {
               else if (i === chosen) cls += ' wrong';
             }
             html += '<button class="' + cls + '" data-opt="' + i + '" ' + (chosen !== null ? 'disabled' : '') + '>' +
-              '<span style="font-weight:800">' + (letters[i] || (i + 1)) + '.</span> <span>' + esc(opt) + '</span></button>';
+              '<span style="font-weight:800">' + (letters[i] || (i + 1)) + '.</span> <span>' + fmtMath(opt) + '</span></button>';
           });
 
           if (chosen === null && q.pista) {
@@ -696,7 +767,8 @@ export function buildStandaloneHtml(params: {
             (caso.es_repaso_libreta ? '<span class="badge badge-repaso">Repaso Libreta</span>' : '') + '</div>' +
             '<div class="progress-bar"><div class="progress-fill" style="width:' + pct + '%"></div></div>' +
             '<p style="margin:0 0 6px;font-size:12px;font-weight:700;color:#4f46e5;text-transform:uppercase">Toca la afirmación con trampa o error</p>' +
-            '<h2 style="margin:0 0 16px;font-size:19px">' + esc(caso.contexto) + '</h2>';
+            '<h2 style="margin:0 0 16px;font-size:19px">' + fmtMath(caso.contexto) + '</h2>' +
+            (caso.recurso_visual ? renderVisual(caso.recurso_visual, chosen !== null) : '');
 
           (caso.afirmaciones || []).forEach(function (st, i) {
             var cls = 'option-btn';
@@ -705,7 +777,7 @@ export function buildStandaloneHtml(params: {
               else if (i === chosen) cls += ' wrong';
             }
             html += '<button class="' + cls + '" data-ce="' + i + '" ' + (chosen !== null ? 'disabled' : '') + '>' +
-              '<span style="font-weight:800">' + (i + 1) + '.</span> <span>' + esc(st) + '</span></button>';
+              '<span style="font-weight:800">' + (i + 1) + '.</span> <span>' + fmtMath(st) + '</span></button>';
           });
 
           if (chosen !== null) {
